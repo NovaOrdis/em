@@ -8,17 +8,23 @@
 function main
 {
     local command
+    local command_args
 
     while [ "$1" != "" ]; do
         if [ "$1" = "--debug" ]; then
             debug_off=false
         elif [ "${command}" = "" ]; then
             command=$1
+        else
+            [ "${command_args}" = "" ] && command_args=$1 || command_args="${command_args} $1"
         fi
         shift
     done
 
-    debug "command: ${command}"
+    debug "command: ${command} args: ${command_args}"
+
+    [ ! -f $(dirname $0)/../commands/${command} ] && { echo "no such command '${command}'"; exit 1; }
+
 
 }
 
