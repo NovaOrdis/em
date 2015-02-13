@@ -2,3 +2,19 @@
 #
 # the entry point in em. This script should be placed in PATH
 #
+
+[ -f $(dirname $0)/../em.shlib ] && . $(dirname $0)/../em.shlib || { echo "$(dirname $0)/../em.shlib not found" 1>&2; exit 1; }
+
+function main
+{
+    local command
+    while [ "$1" != "" ]; do
+        [ "$1" = "" ] && command=$1
+        shift
+    done
+
+    debug "command: ${command}"
+
+}
+
+main $@
