@@ -1,0 +1,654 @@
+#!/bin/bash
+#
+# Designed to configure a new ec2 instance after creation
+#
+#
+
+environment_manager=172.31.22.204
+java_archive_file=jdk-7u75-linux-x64.tar.gz
+amq_archive_file=jboss-a-mq-6.1.0.redhat-379.zip
+
+function get_ip_address
+{
+    local ip
+    ip=$(ifconfig eth0 | grep "inet ") || { exit 1; }
+    ip=${ip#*inet }
+    ip=${ip%% *}
+    [ "${ip}" = "" ] && { echo "failed to figure out the IP address" 1>&2; exit 1; }
+    echo ${ip}
+}
+
+# return the absolute path of the sole Java directory, or empty string if no java directory
+# is found, or fail if more than one java directory is found
+function get_java_dir
+{
+    local parent=$1
+
+    [ "${parent}" = "" ] && { echo "'parent' directory not specified" 1>&2; exit 1; }
+    [ -d ${parent} ] || { echo "'parent' ${parent} is not a directory" 1>&2; exit 1; }
+
+    local java_dir
+
+    for i in $(ls -d ${parent}/*); do
+        if [ -d ${i} ]; then
+            local name
+            name=$(basename ${i})
+            name=${name:0:3}
+            if [ "${name}" = "jdk" ]; then
+                [ "${java_dir}" != "" ] && { echo "more than one java directory exist in ${parent}: ${java_dir}, ${i}" 1>&2; exit 1; }
+                java_dir=${i}
+            fi
+        fi
+    done
+
+    echo ${java_dir}
+}
+
+# return the absolute path of the sole A-MQ directory, or empty string if no A-MQ directory
+# is found, or fail if more than one A-MQ directory is found
+function get_amq_dir
+{
+    local parent=$1
+
+    [ "${parent}" = "" ] && { echo "'parent' directory not specified" 1>&2; exit 1; }
+    [ -d ${parent} ] || { echo "'parent' ${parent} is not a directory" 1>&2; exit 1; }
+
+    local amq_dir
+
+    for i in $(ls -d ${parent}/*); do
+        if [ -d ${i} ]; then
+            local name
+            name=$(basename ${i})
+            name=${name:0:10}
+            if [ "${name}" = "jboss-a-mq" ]; then
+                [ "${amq_dir}" != "" ] && { echo "more than one A-MQ directory exist in ${parent}: ${amq_dir}, ${i}" 1>&2; exit 1; }
+                amq_dir=${i}
+            fi
+        fi
+    done
+
+    echo ${amq_dir}
+}
+
+
+function setup-ec2-user-bashrc
+{
+    logical_id=$1
+    [ "${logical_id}" = "" ] && { echo "the logical id of this VM was not specified" 1>&2; exit 1; }
+
+    if ! grep -q "export MYSELF=" ~ec2-user/.bashrc; then
+        echo "" >> ~ec2-user/.bashrc
+        echo "export MYSELF=${logical_id}" >> ~ec2-user/.bashrc
+        echo "" >> ~ec2-user/.bashrc
+        echo "[ \$(whoami) = \"root\" ] && export PS1=\"root@\${MYSELF}# \" || export PS1=\"\${MYSELF}> \"" >> ~ec2-user/.bashrc
+        echo "" >> ~ec2-user/.bashrc
+        echo "alias h='history'" >> ~ec2-user/.bashrc
+        echo "alias r='sudo su -'" >> ~ec2-user/.bashrc
+        echo "alias cds='cd /nfs/f01'" >> ~ec2-user/.bashrc
+        echo "alias cdw='cd'" >> ~ec2-user/.bashrc
+        echo "" >> ~ec2-user/.bashrc
+        echo "export GLD_HOME=/nfs/f01/gld/current"  >> ~ec2-user/.bashrc
+        echo "export PATH=\${PATH}:\${GLD_HOME}/bin:/nfs/f01/bin"   >> ~ec2-user/.bashrc
+        echo "" >> ~ec2-user/.bashrc
+        echo "ec2-user .bashrc done"
+    fi
+}
+
+function setup-ssh-private-key
+{
+    if [ ! -f ~ec2-user/.ssh/id_rsa ]; then
+(cat << EOF
+-----BEGIN RSA PRIVATE KEY-----
+MIIEpQIBAAKCAQEAu8W9EjNFW1AUPMX23yBSeZvuNE/PSwK0cN4wrFvY5ioZQa1B
+bBc7gBM9REjoGGO2MMfegk5miOg696VBRRP+Tp21gifJwcoBr2Cg7U5rIxBodpg+
+IDVT+3pBx06G539T9ueEiQOL3GRzRp0fFK9SX3jK73J9iDQq+2bkOqOWosaXc7D8
+od+q8/fA18oNhwDtg1AcMxaiQ9tbbY22/KNNgKn5ir2mzugJYg4YFeJy6SGhqGZe
+zjc+7R3LUSS+dqjoX/ByYntvvTVjix+vC5ocPWJimFPnaswcwcudYNvhYZuRkctT
+jPjakuIEIJE4vCjp1JZpMk6vntU7LvHKkz0YZwIDAQABAoIBAB7QhYWuGkyw6JFM
+n4XgZQiF+WJmUotpxzjajbxLWl3zPK/Vge3+JgqPnbdOC6CtBGIe+roBqbv/+GVZ
+nkt6y3oVUYspgmemAf7I6b/n5ZccgzgrJc7dUYnsd00A6wykjZ/wQITHqzUg2vYU
+pNwdJXR7ezouXMF0ZjVZnkytOfQ+QPdwxWJVqnuWQs9Bei+8AmAGBMP50kKvO444
+LthyRWUudHvxbPMam4pHhoDiWk1wRmuodC/h2sfrrhRTGZqNZRTCc42Q/31gyGLn
+boLG/d4gdrPsIPysuCKjEa0/mmQzl1581UZWvhwxPV9vAEmU1gMoDD60FDhrGPRC
+twPhFFECgYEA3aKvQP6xzyZ+dmOb19yhweVqe6rsBySYINAAmfYSMSgokalw0mBt
+kadYcbALquB9Wy+EJikUchpQlUjESHQhQthqafo/AjwAkbywMqX4jrojETPfqL+t
+YtmwI2PWK5jtaaWozQGKzMlCpl7VO8DsaU/LJNk9Udejz/mNmMMHXwkCgYEA2OLv
+xBW9wFoVYXV7myftY9aiOOsHlhZxnXVCWNPK4lPLzDk66KbCShoWDoyqN8sS3ehh
+Hj1auJip+5i2lN3fm2K8Razk7VE2linwJ4jlHSLu2C3OgeqPy16X3OfUwZIsD0K/
+rYeY42uFeqMvs153tZ+F8YUSWBPOlJHHO1gZJ+8CgYEAinE5eabemJ/Z9MeprD/U
+BtLwHcmZX6jbIfvrtEBCAtSr6rjlkXPMXWQj2ff2gclyZEgdCt00OUX4uhdXDE8G
+C8Q1THeVbibe0CoGAc0sorLgfrlhZv48JvgFj0WonVkMS6a/9zaUZfD9ogCwv391
+7R57rUvJgtrpJ1shuJ9ydkkCgYEAsRTRGPN7Y0Lp9BHdIzh9XafP+dMD9apLh3lG
++4mpPBOY8RzFGVGWjrQv0B9Pl5BJzj8+lFcZ7GBRYWg1ouRo/tCl0emxXIaToBWL
+zGu8TYbJJl54HqDqWOzZ53atwoJbUPZ50/BDh2OxrwjwGG6IJRWjYif5a0p4v9sq
+pSxwFacCgYEAqe4LMH+KKkdxmQJMaBNqf5+D+9kzqT2Fwu8e/nnjr2zTpnKcr14J
+7LEKCGfSTQ2u8EfzN0qF207mWaJ9z6Bh4B00GxNy5868X3YcjcAvfcLMM38oG7Cx
+xhMOs8DmFdGjextbHLHpk76lX2MR9JJyGS/EtYWQ5Yc4V5iW3FsriPc=
+-----END RSA PRIVATE KEY-----
+EOF
+) > ~ec2-user/.ssh/id_rsa
+        chown ec2-user:ec2-user ~ec2-user/.ssh/id_rsa
+        chmod go-rwx ~ec2-user/.ssh/id_rsa
+        echo "ec2-user's ssh private key installed"
+    fi
+
+    if [ ! -f ~root/.ssh/id_rsa ]; then
+(cat << EOF
+-----BEGIN RSA PRIVATE KEY-----
+MIIEpQIBAAKCAQEAu8W9EjNFW1AUPMX23yBSeZvuNE/PSwK0cN4wrFvY5ioZQa1B
+bBc7gBM9REjoGGO2MMfegk5miOg696VBRRP+Tp21gifJwcoBr2Cg7U5rIxBodpg+
+IDVT+3pBx06G539T9ueEiQOL3GRzRp0fFK9SX3jK73J9iDQq+2bkOqOWosaXc7D8
+od+q8/fA18oNhwDtg1AcMxaiQ9tbbY22/KNNgKn5ir2mzugJYg4YFeJy6SGhqGZe
+zjc+7R3LUSS+dqjoX/ByYntvvTVjix+vC5ocPWJimFPnaswcwcudYNvhYZuRkctT
+jPjakuIEIJE4vCjp1JZpMk6vntU7LvHKkz0YZwIDAQABAoIBAB7QhYWuGkyw6JFM
+n4XgZQiF+WJmUotpxzjajbxLWl3zPK/Vge3+JgqPnbdOC6CtBGIe+roBqbv/+GVZ
+nkt6y3oVUYspgmemAf7I6b/n5ZccgzgrJc7dUYnsd00A6wykjZ/wQITHqzUg2vYU
+pNwdJXR7ezouXMF0ZjVZnkytOfQ+QPdwxWJVqnuWQs9Bei+8AmAGBMP50kKvO444
+LthyRWUudHvxbPMam4pHhoDiWk1wRmuodC/h2sfrrhRTGZqNZRTCc42Q/31gyGLn
+boLG/d4gdrPsIPysuCKjEa0/mmQzl1581UZWvhwxPV9vAEmU1gMoDD60FDhrGPRC
+twPhFFECgYEA3aKvQP6xzyZ+dmOb19yhweVqe6rsBySYINAAmfYSMSgokalw0mBt
+kadYcbALquB9Wy+EJikUchpQlUjESHQhQthqafo/AjwAkbywMqX4jrojETPfqL+t
+YtmwI2PWK5jtaaWozQGKzMlCpl7VO8DsaU/LJNk9Udejz/mNmMMHXwkCgYEA2OLv
+xBW9wFoVYXV7myftY9aiOOsHlhZxnXVCWNPK4lPLzDk66KbCShoWDoyqN8sS3ehh
+Hj1auJip+5i2lN3fm2K8Razk7VE2linwJ4jlHSLu2C3OgeqPy16X3OfUwZIsD0K/
+rYeY42uFeqMvs153tZ+F8YUSWBPOlJHHO1gZJ+8CgYEAinE5eabemJ/Z9MeprD/U
+BtLwHcmZX6jbIfvrtEBCAtSr6rjlkXPMXWQj2ff2gclyZEgdCt00OUX4uhdXDE8G
+C8Q1THeVbibe0CoGAc0sorLgfrlhZv48JvgFj0WonVkMS6a/9zaUZfD9ogCwv391
+7R57rUvJgtrpJ1shuJ9ydkkCgYEAsRTRGPN7Y0Lp9BHdIzh9XafP+dMD9apLh3lG
++4mpPBOY8RzFGVGWjrQv0B9Pl5BJzj8+lFcZ7GBRYWg1ouRo/tCl0emxXIaToBWL
+zGu8TYbJJl54HqDqWOzZ53atwoJbUPZ50/BDh2OxrwjwGG6IJRWjYif5a0p4v9sq
+pSxwFacCgYEAqe4LMH+KKkdxmQJMaBNqf5+D+9kzqT2Fwu8e/nnjr2zTpnKcr14J
+7LEKCGfSTQ2u8EfzN0qF207mWaJ9z6Bh4B00GxNy5868X3YcjcAvfcLMM38oG7Cx
+xhMOs8DmFdGjextbHLHpk76lX2MR9JJyGS/EtYWQ5Yc4V5iW3FsriPc=
+-----END RSA PRIVATE KEY-----
+EOF
+) > ~root/.ssh/id_rsa
+        chmod go-rwx ~root/.ssh/id_rsa
+        echo "root's ssh private key installed"
+    fi
+}
+
+function setup-ssh-authorized-key
+{
+    [ ! -f ~ec2-user/.ssh/authorized_keys ] && \
+        { echo "~ec2-user/.ssh/authorized_keys does not exist" 1>&2; exit 1; }
+
+    if ! grep -q "ec2-user@internal EC2" ~ec2-user/.ssh/authorized_keys; then
+(cat << EOF
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7xb0SM0VbUBQ8xfbfIFJ5m+40T89LArRw3jCsW9jmKhlBrUFsFzuAEz1ESOgYY7Ywx96CTmaI6Dr3pUFFE/5OnbWCJ8nBygGvYKDtTmsjEGh2mD4gNVP7ekHHTobnf1P254SJA4vcZHNGnR8Ur1JfeMrvcn2INCr7ZuQ6o5aixpdzsPyh36rz98DXyg2HAO2DUBwzFqJD21ttjbb8o02AqfmKvabO6AliDhgV4nLpIaGoZl7ONz7tHctRJL52qOhf8HJie2+9NWOLH68Lmhw9YmKYU+dqzBzBy51g2+Fhm5GRy1OM+NqS4gQgkTi8KOnUlmkyTq+e1Tsu8cqTPRhn ec2-user@internal EC2
+EOF
+) >> ~ec2-user/.ssh/authorized_keys
+    echo "ec2-user's ssh public key installed into ~ec2-user/.ssh/authorized_keys"
+    fi
+}
+
+function setup-root-bashrc
+{
+    if ! grep -q "ec2-user/\.bashrc" ~root/.bashrc; then
+        echo "" >> ~root/.bashrc
+        echo ". ~ec2-user/.bashrc" >> ~root/.bashrc
+        echo "" >> ~root/.bashrc
+        echo "root .bashrc done"
+    fi
+}
+
+function initialize-enviornment-manager-hosts
+{
+    logical_id=$1
+    [ "${logical_id}" = "" ] && { echo "the logical id of this VM was not specified" 1>&2; exit 1; }
+
+    if ! grep -q " ${logical_id}$" /etc/hosts; then
+
+        local ip
+        ip=$(get_ip_address) || exit 1
+        echo "" >> /etc/hosts
+        echo "${ip} ${logical_id}" >> /etc/hosts
+        echo "registered ${logical_id} as ${ip} in /etc/hosts"
+    fi
+
+    chgrp ec2-user /etc/hosts
+    chmod g+w /etc/hosts
+}
+
+function register-with-enviornment-manager
+{
+    local logical_id=$1
+    [ "${logical_id}" = "" ] && { echo "the logical id of this VM was not specified" 1>&2; exit 1; }
+
+    # add ourselves in the environment's manager /etc/hosts if we're not there already
+
+    local ip;
+    ip=$(get_ip_address) || { exit 1; }
+    if ssh ec2-user@${environment_manager} "{ grep -q \" ${logical_id}\" /etc/hosts && exit 1; }; echo \"${ip} ${logical_id}\" >> /etc/hosts"; then
+        echo "updated /etc/hosts with ${logical_id}/${ip} on the environment manager"
+    fi
+}
+
+function copy-known-environment-hosts-from-manager
+{
+    [ -f ./.tmp.txt ] && rm ./.tmp.txt
+
+    # get the current /etc/hosts from the environment manager
+    scp -q ec2-user@${environment_manager}:/etc/hosts ./.tmp.txt || \
+        { echo "failed to get /etc/hosts from the environment manager" 1>&2; exit 1; }
+
+    # copy everything that is not "localhost" into the local /etc/hosts
+    declare -a lines;
+    readarray < .tmp.txt -t lines
+    line_number=0
+    while [ ${line_number} -lt ${#lines[*]} ]; do
+        line=${lines[${line_number}]}
+        ((line_number++))
+
+        [ "${line}" = "" ] && continue;
+        if echo ${line} | grep -q "localhost"; then
+            continue
+        fi
+
+        ip=${line%% *}
+        logical_id=${line##* }
+
+        # skip the logica ids we have definitions for
+        if ! grep -q " ${logical_id}$" /etc/hosts; then
+            echo "${ip} ${logical_id}" >> /etc/hosts && echo "added '${ip} ${logical_id}' to /etc/hosts"
+        fi
+    done
+    unset lines
+}
+
+function install-zip
+{
+    local package_name=zip
+    #if ! yum -q info ${package_name} > /dev/null 2>&1; then
+        yum install ${package_name} || { echo "failed to install ${package_name}" 1>&2; exit 1; }
+    #fi
+    local package_name=unzip
+    #if ! yum -q info ${package_name} > /dev/null 2>&1; then
+        yum install ${package_name} || { echo "failed to install ${package_name}" 1>&2; exit 1; }
+    #fi
+}
+
+function mount-main-storage-as-data-directory
+{
+    local partition=$1
+
+    #
+    # determine wheteher fstab is already set up
+    #
+
+    if ! grep -q "^.* */data *ext4.*$" /etc/fstab; then
+
+        #
+        # fstab not configured
+        #
+
+        unmounted_device_count=$(lsblk -l | grep "part *$" | wc -l) || exit 1
+
+        # the only case we're handling is when we only have an unmounted device or
+        # --partition is specified; anything else is an error
+
+        local device_name
+
+        if [ "${unmounted_device_count}" = "0" ]; then
+
+            # all devices are mounted, but we still need to make sure that the /data subdir exist
+            device_name=$(lsblk -l | grep "/data") || exit 1
+            device_name="/dev/${device_name%% *}"
+
+        elif [ "${partition}" != "" ]; then
+
+            device_name="/dev/${partition}"
+
+        elif [ "${unmounted_device_count}" = "1" ]; then
+
+            device_name=$(lsblk -l | grep "part *$")
+            device_name=${device_name%% *}
+            device_name="/dev/${device_name}"
+
+        else
+            echo "unmounted_device_count: '${unmounted_device_count}'";
+            echo ""
+            echo "unmounted devices:"
+            echo ""
+            lsblk -l | grep "part *$"
+            echo ""
+            echo "specify the one you want to use with '--partition' and try again"
+            echo ""
+            exit 1;
+        fi
+
+        device_type=$(file -s ${device_name})
+        device_type=${device_type#*: }
+
+        #
+        # determine whether we need to create a file system
+        #
+
+        if [ "${device_type}" == "data" ]; then
+            # the device does not have a filesystem on it, it does need formatting
+            mkfs -t ext4 ${device_name} && echo "created ext4 filesystem on ${device_name}" || \
+                { echo "failed to create filesystem on ${device_name}"; exit 1; }
+        fi
+
+        # update /etc/fstab
+        echo "${device_name}       /data   ext4    defaults,nofail        0       2" >> /etc/fstab && \
+        echo "declared ${device_name} in /etc/fstab"
+
+    else
+
+        #
+        # fstab is configured
+        #
+
+        if [ ! -d /data ]; then
+            mkdir /data && echo "created mountpoint /data"
+            chgrp ec2-user /data
+            chmod g+w /data
+        fi
+
+        mount -a
+
+        #
+        # make sure the filesystem is mounted
+        #
+
+        count=$(mount | grep "on /data " | wc -l)
+
+        if [ "${count}" != "1" ]; then
+            echo ""
+            echo "/data does not seem to be mounted correctly, count ${count}:"
+            echo ""
+            mount
+            exit 1
+        fi
+    fi
+
+    if [ ! -d /data/archive ]; then
+        mkdir /data/archive && echo "created /data/archive"
+        chgrp ec2-user /data/archive
+        chmod g+w /data/archive
+    fi
+
+    if [ ! -d /data/bin ]; then
+        mkdir /data/bin && echo "created /data/bin"
+        chgrp ec2-user /data/bin
+        chmod g+w /data/bin
+    fi
+
+}
+
+function setup-nfs-server
+{
+    local package_name=rpcbind
+    #if ! yum -q info ${package_name} > /dev/null 2>&1; then
+        yum install ${package_name} || { echo "failed to install ${package_name}" 1>&2; exit 1; }
+    #fi
+
+    local package_name=nfs-utils
+    #if ! yum -q info ${package_name} > /dev/null 2>&1; then
+        yum install ${package_name} || { echo "failed to install ${package_name}" 1>&2; exit 1; }
+    #fi
+
+    #
+    # share /data in /etc/exports
+    #
+
+    if ! grep -q "^/data " /etc/exports; then
+        echo "/data 172.31.16.0/20(rw,sync,no_root_squash,no_subtree_check)" >> /etc/exports && echo "declared /data in /etc/exports"
+    fi
+
+    if ! systemctl -q is-enabled nfs-server; then
+        systemctl enable nfs-server
+        echo "nfs server enabled for boot"
+    fi
+
+    if ! systemctl -q is-active nfs-server; then
+        service nfs-server start
+        echo "nfs server started"
+    fi
+}
+
+function install_data_content
+{
+    if [ ! -f /data/bin/ec2-host ]; then
+        [ -f $(dirname $0)/ec2-host ] || { echo "$(dirname $0)/ec2-host not found, make sure to upload it" 1>&2; exit 1; }
+        cp $(dirname $0)/ec2-host /data/bin
+        chmod a+x /data/bin/ec2-host
+        echo "/data/bin/ec2-host deployed"
+    fi
+
+    if [ ! -f /data/archive/${java_archive_file} ]; then
+        [ -f $(dirname $0)/${java_archive_file} ] || { echo "$(dirname $0)/${java_archive_file} not found, make sure to upload it" 1>&2; exit 1; }
+        cp $(dirname $0)/${java_archive_file} /data/archive
+        echo "/data/archive/${java_archive_file} deployed"
+    fi
+
+    if [ ! -f /data/archive/${amq_archive_file} ]; then
+        [ -f $(dirname $0)/${amq_archive_file} ] || { echo "$(dirname $0)/${amq_archive_file} not found, make sure to upload it" 1>&2; exit 1; }
+        cp $(dirname $0)/${amq_archive_file} /data/archive
+        echo "/data/archive/${amq_archive_file} deployed"
+    fi
+}
+
+function setup-nfs-client
+{
+    local package_name=nfs-utils
+    #if ! yum -q info ${package_name} > /dev/null 2>&1; then
+        yum install ${package_name} || { echo "failed to install ${package_name}" 1>&2; exit 1; }
+    #fi
+
+    if [ ! -d /nfs/f01 ]; then
+        mkdir -p /nfs/f01 && echo "created mount point /nfs/f01" || exit 1
+    fi
+
+    if ! grep -q "f01:/data" /etc/fstab; then
+        echo "f01:/data /nfs/f01 nfs _netdev,bg 0 0" >> /etc/fstab || { echo "failed to update /etc/fstab" 1>&2; exit 1; }
+        echo "updated /etc/fstab"
+    fi
+
+    mount -a
+
+    [ ! -d /nfs/f01/archive ] && { echo "directory nfs/f01/archive does not exist, which means NFS client installation did not work" 1>&2; exit 1; }
+}
+
+function link-to-ec2-host
+{
+    local logical_id=$1
+    [ "${logical_id}" = "" ] && { echo "the logical id of this VM was not specified" 1>&2; exit 1; }
+    local bin_dir=$2
+    [ "${bin_dir}" = "" ] && { echo "'bin_dir' not provided" 1>&2; exit 1; }
+    [ ! -d ${bin_dir} ] && { echo "'bin_dir' ${bin_dir} not a directory" 1>&2; exit 1; }
+
+    [ -x ${bin_dir}/ec2-host ] || { echo "${bin_dir}/ec2-host does not exist or is not executable. Have you configured the NFS client?" 1>&2; exit 1; }
+
+    if [ ! -h ${bin_dir}/${logical_id} ]; then
+        (cd ${bin_dir}; ln -s ./ec2-host ${logical_id}) && echo "linked as ${logical_id} to ${bin_dir}/ec2-host"
+    fi
+}
+
+# this must be run after we activate the NFS client, as we need access to /nfs/f01/archive
+function install_java
+{
+    local archive_dir=$1
+    [ "${archive_dir}" = "" ] && { echo "'archive_dir' not provided" 1>&2; exit 1; }
+
+    [ -h /opt/java ] && return 0; # java already isntalled
+
+    [ -d ${archive_dir} ] || { echo "${archive_dir} not a directory, was the NFS client activated?" 1>&2; exit 1; }
+
+    local java_archive_path=${archive_dir}/${java_archive_file}
+    [ -f ${java_archive_path} ] || { echo "java archive ${java_archive_path} does not exist" 1>&2; exit 1; }
+
+    (cd /opt; gunzip < ${java_archive_path} | tar xf -) && echo "extracted java into /opt" || { echo "failed to extract java" 1>&2; exit 1; }
+
+    java_dir=$(get_java_dir /opt)
+
+    ln -s ${java_dir} /opt/java && echo "linked ${java_dir} to /opt/java"
+
+    # update ec2-user's .bashrc
+
+    if ! grep -q "export JAVA_HOME=/opt/java" ~ec2-user/.bashrc; then
+        echo "export JAVA_HOME=/opt/java" >> ~ec2-user/.bashrc
+        echo "export PATH=\${JAVA_HOME}/bin:\${PATH}" >> ~ec2-user/.bashrc
+        echo "" >> ~ec2-user/.bashrc
+        echo "updated ~ec2-user/.bashrc with JAVA_HOME"
+    fi
+}
+
+function install_amq
+{
+    logical_id=$1
+    [ "${logical_id}" = "" ] && { echo "the logical id of this VM was not specified" 1>&2; exit 1; }
+
+    [ -h /opt/a-mq ] && return 0; # A-MQ already isntalled
+
+    local archive_dir=/nfs/f01/archive
+    [ -d ${archive_dir} ] || { echo "${archive_dir} not a directory, was the NFS client activated?" 1>&2; exit 1; }
+
+    local amq_archive_path=${archive_dir}/${amq_archive_file}
+    [ -f ${amq_archive_path} ] || { echo "A-MQ archive ${amq_archive_path} does not exist" 1>&2; exit 1; }
+
+    (cd /opt; unzip -q ${amq_archive_path}) && echo "extracted A-MQ into /opt" || { echo "failed to extract A-MQ" 1>&2; exit 1; }
+
+    amq_dir=$(get_amq_dir /opt)
+
+    (cd /opt; ln -s ${amq_dir} a-mq) && echo "linked ${amq_dir} to /opt/a-mq"
+
+    # update ec2-user's .bashrc
+
+    if ! grep -q "export AMQ_HOME=/opt/a-mq" ~ec2-user/.bashrc; then
+        echo "export AMQ_HOME=/opt/a-mq" >> ~ec2-user/.bashrc
+        echo "alias amq='cd \${AMQ_HOME}'" >> ~ec2-user/.bashrc
+        echo "alias amqb='cd \${AMQ_HOME}/bin'" >> ~ec2-user/.bashrc
+        echo "alias amql='cd \${AMQ_HOME}/data/log'" >> ~ec2-user/.bashrc
+        echo "alias amqc='cd \${AMQ_HOME}/etc'" >> ~ec2-user/.bashrc
+        echo "alias amq-start='\${AMQ_HOME}/bin/start'" >> ~ec2-user/.bashrc
+        echo "alias amq-stop='\${AMQ_HOME}/bin/stop'" >> ~ec2-user/.bashrc
+        echo "" >> ~ec2-user/.bashrc
+        echo "updated ~ec2-user/.bashrc with A-MQ configuration"
+    fi
+
+    # update permissions
+    chgrp ec2-user /opt/a-mq/ && echo "chgrp ec2-user /opt/a-mq/"
+    chmod g+w /opt/a-mq/ && echo "chmod g+w /opt/a-mq/"
+    chgrp -R ec2-user /opt/a-mq/data && echo "chgrp -R ec2-user /opt/a-mq/data"
+    chmod -R g+w /opt/a-mq/data && echo "chmod -R g+w /opt/a-mq/data"
+    chgrp -R ec2-user /opt/a-mq/etc && echo "chgrp -R ec2-user /opt/a-mq/etc"
+    chmod -R g+w /opt/a-mq/etc && echo "chmod -R g+w /opt/a-mq/etc"
+
+    # security
+    local f
+
+    f=/opt/a-mq/etc/users.properties
+
+    if grep -q "^#admin=admin,admin$" ${f}; then
+        cat ${f} | sed -e 's/^#admin=admin,admin$/admin=admin123,admin/' > ./.tmp.txt || { echo "" 1>&2; exit 1; }
+        mv ./.tmp.txt ${f}
+        chgrp ec2-user ${f}
+        chmod g+w ${f}
+        echo "updated A-MQ security credentials in ${f}"
+    fi
+
+    f=/opt/a-mq/etc/system.properties
+
+    if grep -q "^#activemq.jmx.user=admin$" ${f}; then
+        cat ${f} | sed \
+            -e 's/^#activemq.jmx.user=admin$/activemq.jmx.user=admin/' \
+            -e 's/^#activemq.jmx.password=.*$/activemq.jmx.password=admin123/' > ./.tmp.txt || { echo "" 1>&2; exit 1; }
+        mv ./.tmp.txt ${f}
+        chgrp ec2-user ${f}
+        chmod g+w ${f}
+        echo "updated A-MQ security credentials in ${f}"
+    fi
+
+    # broker name
+
+    f=/opt/a-mq/etc/org.fusesource.mq.fabric.server-default.cfg
+
+    if grep -q "^broker-name=amq$" ${f}; then
+        cat ${f} | sed -e 's/^broker-name=amq$/broker-name='${logical_id}'/' > ./.tmp.txt || { echo "" 1>&2; exit 1; }
+        mv ./.tmp.txt ${f}
+        chgrp ec2-user ${f}
+        chmod g+w ${f}
+        echo "updated broker-name to ${logical_id} in ${f}"
+    fi
+}
+
+function main
+{
+    local logical_id
+    local amq=false
+    local partition
+
+    while [ "$1" != "" ]; do
+        if [ "$1" = "--amq" ]; then
+            amq=true
+        elif [ "$1" = "--partition" ]; then
+            shift
+            #
+            # this is when we have more than one unformatted partions
+            # it allows us to specified wich one to use
+            #
+            partition=$1
+
+            [ "${partition}" = "" ] && { echo "a partition name (ex: xvda1) should follow --partition" 1>&2; exit 1; }
+        elif [ "${logical_id}" = "" ]; then
+            logical_id=$1
+        fi
+        shift
+    done
+
+    [ "${logical_id}" = "" ] && { echo "logical ID must be specified" 1>&2; exit 1; }
+
+    [ $(whoami) = "root" ] || { echo "this script can only be run by root" 1>&2; exit 1; }
+
+    #
+    # Decide if we're a file server or a regular node
+    #
+
+    if [ "${logical_id:0:1}" != "f" ]; then
+
+        #
+        # We're a regular (A-MQ node)
+        #
+
+        echo "installing a regular node ${logical_id}"
+
+        setup-ec2-user-bashrc ${logical_id}
+	    setup-ssh-private-key
+  	    setup-ssh-authorized-key
+	    setup-root-bashrc
+	    register-with-enviornment-manager ${logical_id}
+	    copy-known-environment-hosts-from-manager
+	    install-zip
+	    setup-nfs-client
+	    link-to-ec2-host ${logical_id} /nfs/f01/bin
+	    install_java /nfs/f01/archive
+	    ${amq} && install_amq ${logical_id}
+
+    else
+
+        #
+        # We're a file server/Enviornment Manager
+        #
+
+        echo "installing the environment manager ${logical_id}"
+
+        setup-ec2-user-bashrc ${logical_id}
+	    setup-ssh-private-key
+  	    setup-ssh-authorized-key
+	    setup-root-bashrc
+	    initialize-enviornment-manager-hosts ${logical_id}
+	    install-zip
+	    mount-main-storage-as-data-directory ${partition}
+	    setup-nfs-server
+	    install_data_content
+	    #setup-nfs-client
+	    link-to-ec2-host ${logical_id} /data/bin
+	    install_java /data/archive
+    fi
+}
+
+main $@
+
+
