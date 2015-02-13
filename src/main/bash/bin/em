@@ -8,10 +8,11 @@
 function main
 {
     local command
+
     while [ "$1" != "" ]; do
-        if [ "" = "--debug" ]; then
+        if [ "$1" = "--debug" ]; then
             debug_off=false
-        elif [ "$1" = "" ]; then
+        elif [ "${command}" = "" ]; then
             command=$1
         fi
         shift
