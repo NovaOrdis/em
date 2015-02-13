@@ -9,8 +9,6 @@
 #
 #
 
-
-
 # By default, without doing anything, debug is turned off.
 # To turn debugging on, set debug_off=false somewhere in the upper calling layers.
 function debug
@@ -39,6 +37,17 @@ function id-to-ip
     echo ${line}
 }
 
+# returns our eth0 address
+function get-ip-address
+{
+    local ip
+    ip=$(ifconfig eth0 | grep "inet ") || { exit 1; }
+    ip=${ip#*inet }
+    ip=${ip%% *}
+    [ "${ip}" = "" ] && { echo "failed to figure out the IP address" 1>&2; exit 1; }
+    echo ${ip}
+}
+
 #######################################################################################
 # Host-wide configuration
 #######################################################################################
@@ -49,54 +58,471 @@ function setup-hostname
 
     debug "setup-hostname(id=$1)"
 
-    local content
-
-    content=$(cat /etc/hostname)
-    [ "${content}" = "${id}" ] && { echo "hostname is '${id}' already"; return 0; }
-
-    if ${dry_run}; then
-        echo "[dry-run]: echo \"${id}\" > /etc/hostname"
-        return 0;
+    if [ "$(hostname)" = "${id}" ]; then
+        # nothing to do, return
+        return 0
     fi
+
+    hostname ${id} || { echo "failed to set hostname to ${id}" 1>&2; exit 1; }
 
     echo "${id}" > /etc/hostname && \
         echo "setup hostname as '${id}'" || \
         { echo "failed to write ${id} into /etc/hostname" 1>&2; exit 1; }
+
+    [ "${id}" = "$(hostname)" ] || { echo "even if ${id} was written into /etc/hostname, the hostname command returs $(hostname)" 1>&2; exit 1; }
+}
+
+#
+# if the <target_ip> <id> is already declared, don't do anything. Register it otherwise.
+#
+function update-etc-hosts
+{
+    local id=$1
+    local target_ip=$2
+    [ "${id}" = "" ] && { echo "'id' not specified" 1>&2; exit 1; }
+    [ "${target_ip}" = "" ] && { echo "'target_ip' not specified" 1>&2; exit 1; }
+
+    if ! grep -q "^${target_ip} *${id}$" /etc/hosts; then
+        # first check to see if the id was registered under a different ip
+        if grep -q " *${id}$" /etc/hosts; then
+            cat /etc/hosts | sed -e 's/^.* *'${id}'$/'${target_ip}' '${id}'/' > /tmp/.txt
+            mv /tmp/.txt /etc/hosts || { echo "failed to restore /etc/hosts" 1>&2; exit 1; }
+            echo "updated /etc/hosts, replaced ${id} definition with  ${target_ip}"
+        else
+            echo "${target_ip} ${id}" >> /etc/hosts
+            echo "updated /etc/hosts, added ${target_ip} ${id}"
+        fi
+    fi
+}
+
+function update-etc-hosts-from-another-hosts-file
+{
+    local source_hosts_file=$1
+    [ "${source_hosts_file}" = "" ] && { echo "'source_hosts_file' not specified" 1>&2; exit 1; }
+    [ ! -f ${source_hosts_file} ] && { echo "'source_hosts_file' ${source_hosts_file} does not exist" 1>&2; exit 1; }
+
+    # copy everything that is not "localhost" into the local /etc/hosts
+    declare -a lines;
+    readarray < ${source_hosts_file} -t lines
+    local line_number=0
+    while [ ${line_number} -lt ${#lines[*]} ]; do
+        local line=${lines[${line_number}]}
+        ((line_number++))
+
+        [ "${line}" = "" ] && continue;
+        if echo ${line} | grep -q "localhost"; then
+            continue
+        fi
+
+        local ip=${line%% *}
+        local id=${line##* }
+
+        update-etc-hosts ${id} ${ip}
+    done
+    unset lines
+}
+
+#
+# This is the function that link the id to ec2-host in /nfs/bin, providing for the shortcut to
+# ssh inot the host
+#
+function link-to-ec2-host
+{
+    local id=$1
+    local bin_dir=$2
+    [ "${id}" = "" ] && { echo "'id' not specified" 1>&2; exit 1; }
+    [ "${bin_dir}" = "" ] && { echo "'bin_dir' not provided" 1>&2; exit 1; }
+    [ ! -d ${bin_dir} ] && { echo "'bin_dir' ${bin_dir} not a directory" 1>&2; exit 1; }
+    [ -x ${bin_dir}/ec2-host ] || { echo "${bin_dir}/ec2-host does not exist or is not executable. Have you configured and started the NFS client?" 1>&2; exit 1; }
+
+    if [ ! -h ${bin_dir}/${id} ]; then
+        (cd ${bin_dir}; ln -s ./ec2-host ${id}) && echo "linked ${id} to ${bin_dir}/ec2-host"
+    fi
 }
 
 #######################################################################################
 # User Environment Configuration
 #######################################################################################
 
+function get-home-dir
+{
+    local user_name=$1
+    debug "setup-bashrc(user_name=$1)"
+    [ "${user_name}" = "" ] && { echo "'user_name' not specified" 1>&2; exit 1; }
+
+    local home_dir
+
+    if [ "${user_name}" = "root" ]; then
+        home_dir="/root"
+    else
+        home_dir="/home/${user_name}"
+    fi
+
+    [ -d ${home_dir} ] || { echo "home directory for user ${user_name} ${home_dir} does not exist" 1>&2; exit 1; }
+
+    echo "${home_dir}"
+}
+
+#
+# assumes the correct hostname is returned by 'hostname' so setup-hostname must be
+# run before this
+#
 function setup-bashrc
 {
-    local target_id=$1
-    local user_name=$2
+    local user_name=$1
+    debug "setup-bashrc(user_name=$1)"
+    [ "${user_name}" = "" ] && { echo "'user_name' not specified" 1>&2; exit 1; }
 
-    debug "setup-bashrc(target_id=$1, user_name=$1)"
-}
+    local hostname
+    hostname=$(hostname) || { echo "failed to execute hostname" 1>&2; exit 1; }
 
-function setup-ec2-user-bashrc
-{
-    logical_id=$1
-    [ "${logical_id}" = "" ] && { echo "the logical id of this VM was not specified" 1>&2; exit 1; }
+    local cursor=">"
+    [ "${user_name}" = "root" ] && cursor="#"
 
-    if ! grep -q "export MYSELF=" ~ec2-user/.bashrc; then
-        echo "" >> ~ec2-user/.bashrc
-        echo "export MYSELF=${logical_id}" >> ~ec2-user/.bashrc
-        echo "" >> ~ec2-user/.bashrc
-        echo "[ \$(whoami) = \"root\" ] && export PS1=\"root@\${MYSELF}# \" || export PS1=\"\${MYSELF}> \"" >> ~ec2-user/.bashrc
-        echo "" >> ~ec2-user/.bashrc
-        echo "alias h='history'" >> ~ec2-user/.bashrc
-        echo "alias r='sudo su -'" >> ~ec2-user/.bashrc
-        echo "alias cds='cd /nfs/f01'" >> ~ec2-user/.bashrc
-        echo "alias cdw='cd'" >> ~ec2-user/.bashrc
-        echo "" >> ~ec2-user/.bashrc
-        echo "export GLD_HOME=/nfs/f01/gld/current"  >> ~ec2-user/.bashrc
-        echo "export PATH=\${PATH}:\${GLD_HOME}/bin:/nfs/f01/bin"   >> ~ec2-user/.bashrc
-        echo "" >> ~ec2-user/.bashrc
-        echo "ec2-user .bashrc done"
+    local PS1_content="export PS1=\"${user_name}@${hostname}${cursor} \""
+
+    local bashrc_file="$(get-home-dir ${user_name})/.bashrc"
+
+    if ! grep -q "${PS1_content}" ${bashrc_file}; then
+        echo "" >> ${bashrc_file}
+        echo "${PS1_content}" >> ${bashrc_file}
+        echo "PS1 configured in ${bashrc_file}"
+    fi
+
+    local alias_content="alias h='history'"
+
+    if ! grep -q "${alias_content}" ${bashrc_file}; then
+        echo "" >> ${bashrc_file}
+        echo "${alias_content}" >> ${bashrc_file}
+        echo "${alias_content} configured in ${bashrc_file}"
+    fi
+
+    alias_content="alias r='sudo su -'"
+
+    if ! grep -q "${alias_content}" ${bashrc_file}; then
+        echo "${alias_content}" >> ${bashrc_file}
+        echo "${alias_content} configured in ${bashrc_file}"
+    fi
+
+    alias_content="alias cds='cd /nfs'"
+
+    if ! grep -q "${alias_content}" ${bashrc_file}; then
+        echo "${alias_content}" >> ${bashrc_file}
+        echo "${alias_content} configured in ${bashrc_file}"
+    fi
+
+    local gld_home_content="export GLD_HOME=/nfs/gld/current"
+
+    if ! grep -q "${gld_home_content}" ${bashrc_file}; then
+        echo "" >> ${bashrc_file}
+        echo "${gld_home_content}" >> ${bashrc_file}
+        echo "export PATH=\${PATH}:\${GLD_HOME}/bin" >> ${bashrc_file}
+        echo "${gld_home_content} configured in ${bashrc_file}"
     fi
 }
+
+function update-bashrc-with-java-information
+{
+    local user=$1
+    local java_home=$2
+
+    [ "${user}" = "" ] && { echo "'user' not provided" 1>&2; exit 1; }
+    [ "${java_home}" = "" ] && { echo "'java_home' not provided" 1>&2; exit 1; }
+    [ -d "${java_home}" ] || { echo "'java_home' ${java_home} does not exist" 1>&2; exit 1; }
+    [ -d "${java_home}/bin" ] || { echo "'java_home'/bin ${java_home}/bin does not exist" 1>&2; exit 1; }
+
+    local bashrc_file="$(get-home-dir ${user})/.bashrc"
+
+    if ! grep -q "export JAVA_HOME=${java_home}" ${bashrc_file}; then
+        echo "" >> ${bashrc_file}
+        echo "export JAVA_HOME=${java_home}" >> ${bashrc_file}
+        echo "export PATH=\${JAVA_HOME}/bin:\${PATH}" >> ${bashrc_file}
+        echo "java information configured in ${bashrc_file}"
+    fi
+}
+
+function setup-environment-private-key
+{
+    local user_name=$1
+    local environment_private_key_file=$2
+    debug "setup-environment-private-key(user_name=$1, environment_private_key_file=$2)"
+    [ "${user_name}" = "" ] && { echo "'user_name' not specified" 1>&2; exit 1; }
+    [ "${environment_private_key_file}" = "" ] && { echo "'environment_private_key_file' not specified" 1>&2; exit 1; }
+    [ -f "${environment_private_key_file}" ] || { echo "'environment_private_key_file' ${environment_private_key_file} does not exist" 1>&2; exit 1; }
+
+    local ssh_dir=$(get-home-dir ${user_name})/.ssh
+
+    if [ ! -d ${ssh_dir} ]; then
+        mkdir ${ssh_dir} || exit 1
+        chown ${user_name}:${user_name} ${ssh_dir} || exit 1
+        echo "created ${ssh_dir}"
+    fi
+
+    if [ ! -f ${ssh_dir}/id_rsa ]; then
+        cat ${environment_private_key_file} >> ${ssh_dir}/id_rsa || { echo "failed to copy environment key file into ${ssh_dir}/id_rsa" 1>&2; exit 1; }
+        chown ${user_name}:${user_name} ${ssh_dir}/id_rsa || exit 1
+        chmod go-rwx ${ssh_dir}/id_rsa || exit 1
+        echo "created ${ssh_dir}/id_rsa"
+    fi
+}
+
+function setup-environment-public-key
+{
+    local user_name=$1
+    local environment_private_key_file=$2
+    debug "setup-environment-private-key(user_name=$1, environment_private_key_file=$2)"
+    [ "${user_name}" = "" ] && { echo "'user_name' not specified" 1>&2; exit 1; }
+    [ "${environment_private_key_file}" = "" ] && { echo "'environment_private_key_file' not specified" 1>&2; exit 1; }
+    [ -f "${environment_private_key_file}" ] || { echo "'environment_private_key_file' ${environment_private_key_file} does not exist" 1>&2; exit 1; }
+
+    local ssh_dir=$(get-home-dir ${user_name})/.ssh
+
+    if [ ! -d ${ssh_dir} ]; then
+        mkdir ${ssh_dir} || exit 1
+        chown ${user_name}:${user_name} ${ssh_dir} || exit 1
+        echo "created ${ssh_dir}"
+    fi
+
+    local key_label="environment-access-key"
+
+    if ! grep -q "${key_label}" ${ssh_dir}/authorized_keys; then
+        local public_key
+        public_key=$(ssh-keygen -y -f ${environment_private_key_file}) || \
+            { echo "failed to generate public key from ${environment_private_key_file}" 1>&2; exit 1; }
+        public_key="${public_key} ${key_label}"
+        echo ${public_key} >> ${ssh_dir}/authorized_keys || { echo "failed to copy environment key file into ${ssh_dir}/id_rsa" 1>&2; exit 1; }
+        chown ${user_name}:${user_name} ${ssh_dir}/id_rsa || exit 1
+        echo "updated ${ssh_dir}/authorized_keys, added '${key_label}'"
+    fi
+}
+
+function setup-ovidiu-defaut-public-key
+{
+    local ovidiu_default_file=$1
+    [ "${ovidiu_default_file}" = "" ] && { echo "'ovidiu_default_file' not specified" 1>&2; exit 1; }
+    [ -f "${ovidiu_default_file}" ] || { echo "'ovidiu_default_file' ${ovidiu_default_file} does not exist" 1>&2; exit 1; }
+
+    local ssh_dir=$(get-home-dir ec2-user)/.ssh
+
+    if ! grep -q "ovidiu_default" ${ssh_dir}/authorized_keys; then
+        cat ${ovidiu_default_file} >> ${ssh_dir}/authorized_keys || { echo "failed to copy ${ovidiu_default_file} into ${ssh_dir}/id_rsa" 1>&2; exit 1; }
+        echo "updated ${ssh_dir}/authorized_keys, added 'ovidiu_default'"
+    fi
+}
+
+#######################################################################################
+# Storage
+#######################################################################################
+
+function mount-main-storage
+{
+    local mount_point=$1
+    local partition=$2
+
+    [ "${mount_point}" = "" ] && { echo "'mount_point' not specified" 1>&2; exit 1; }
+
+    #
+    # determine wheteher fstab is already set up
+    #
+
+    if ! grep -q "^.* *${mount_point} *ext4.*$" /etc/fstab; then
+
+        #
+        # fstab not configured
+        #
+
+        unmounted_device_count=$(lsblk -l | grep "part *$" | wc -l) || exit 1
+
+        # the only case we're handling is when we only have an unmounted device or
+        # --partition is specified; anything else is an error
+
+        local device_name
+
+        if [ "${unmounted_device_count}" = "0" ]; then
+
+            # all devices are mounted, but we still need to make sure that the ${mount_point} subdir exist
+            device_name=$(lsblk -l | grep "${mount_point}") || exit 1
+            device_name="/dev/${device_name%% *}"
+
+        elif [ "${partition}" != "" ]; then
+
+            device_name="/dev/${partition}"
+
+        elif [ "${unmounted_device_count}" = "1" ]; then
+
+            device_name=$(lsblk -l | grep "part *$")
+            device_name=${device_name%% *}
+            device_name="/dev/${device_name}"
+
+        else
+            echo "unmounted_device_count: '${unmounted_device_count}'";
+            echo ""
+            echo "unmounted devices:"
+            echo ""
+            lsblk -l | grep "part *$"
+            echo ""
+            echo "specify the one you want to use with '--partition' and try again"
+            echo ""
+            exit 1;
+        fi
+
+        device_type=$(file -s ${device_name})
+        device_type=${device_type#*: }
+
+        echo "device_name: ${device_name}, ${device_type}: ${device_type}"
+        return 0
+
+        #
+        # determine whether we need to create a file system
+        #
+
+        if [ "${device_type}" == "data" ]; then
+            # the device does not have a filesystem on it, it does need formatting
+            mkfs -t ext4 ${device_name} && echo "created ext4 filesystem on ${device_name}" || \
+                { echo "failed to create filesystem on ${device_name}"; exit 1; }
+        fi
+
+        # update /etc/fstab
+        echo "${device_name}       /data   ext4    defaults,nofail        0       2" >> /etc/fstab && \
+        echo "declared ${device_name} in /etc/fstab"
+
+    else
+
+        #
+        # fstab is configured
+        #
+
+        if [ ! -d /data ]; then
+            mkdir /data && echo "created mountpoint /data"
+            chgrp ec2-user /data
+            chmod g+w /data
+        fi
+
+        mount -a
+
+        #
+        # make sure the filesystem is mounted
+        #
+
+        count=$(mount | grep "on /data " | wc -l)
+
+        if [ "${count}" != "1" ]; then
+            echo ""
+            echo "/data does not seem to be mounted correctly, count ${count}:"
+            echo ""
+            mount
+            exit 1
+        fi
+    fi
+
+    return 0
+
+    if [ ! -d /data/archive ]; then
+        mkdir /data/archive && echo "created /data/archive"
+        chgrp ec2-user /data/archive
+        chmod g+w /data/archive
+    fi
+
+    if [ ! -d /data/bin ]; then
+        mkdir /data/bin && echo "created /data/bin"
+        chgrp ec2-user /data/bin
+        chmod g+w /data/bin
+    fi
+}
+
+
+#######################################################################################
+# Package Installations
+#######################################################################################
+
+function install-package
+{
+    local package_name=$1
+    [ "${package_name}" = "" ] && { echo "'package_name' not specified" 1>&2; exit 1; }
+
+    if ! yum -q list installed ${package_name} 2>/dev/null 1>&2; then
+        yum -q -y install ${package_name} || { echo "failed to install ${package_name}" 1>&2; exit 1; }
+        echo "installed ${package_name}"
+    fi
+}
+
+
+#######################################################################################
+# NFS Installation
+#######################################################################################
+
+function setup-nfs-client
+{
+    install-package nfs-utils
+
+    if [ ! -d /nfs ]; then
+        mkdir -p /nfs && echo "created mount point /nfs" || exit 1
+    fi
+
+    if ! grep -q "f01:/data" /etc/fstab; then
+        echo "f01:/data /nfs nfs _netdev,bg 0 0" >> /etc/fstab || { echo "failed to update /etc/fstab" 1>&2; exit 1; }
+        echo "updated /etc/fstab"
+    fi
+
+    mount -a
+
+    [ ! -d /nfs/archive ] && { echo "directory nfs/archive does not exist, which means NFS client installation did not work" 1>&2; exit 1; }
+}
+
+#######################################################################################
+# Java
+#######################################################################################
+
+# return the absolute path of the sole Java directory, or empty string if no java directory
+# is found, or fail if more than one java directory is found
+function get_java_dir
+{
+    local parent=$1
+
+    [ "${parent}" = "" ] && { echo "'parent' directory not specified" 1>&2; exit 1; }
+    [ -d ${parent} ] || { echo "'parent' ${parent} is not a directory" 1>&2; exit 1; }
+
+    local java_dir
+
+    for i in $(ls -d ${parent}/*); do
+        if [ -d ${i} ]; then
+            local name
+            name=$(basename ${i})
+            name=${name:0:3}
+            if [ "${name}" = "jdk" ]; then
+                [ "${java_dir}" != "" ] && { echo "more than one java directory exist in ${parent}: ${java_dir}, ${i}" 1>&2; exit 1; }
+                java_dir=${i}
+            fi
+        fi
+    done
+
+    echo ${java_dir}
+}
+
+# returns the installed java director
+function install_java
+{
+    local java_archive_name=$1
+    local archive_dir=$2
+    [ "${archive_dir}" = "" ] && { echo "'archive_dir' not provided" 1>&2; exit 1; }
+    [ -d "${archive_dir}" ] || { echo "'archive_dir' ${archive_dir} does not exist" 1>&2; exit 1; }
+
+    local java_archive_file=${archive_dir}/${java_archive_name}
+    [ -f ${java_archive_file} ] || { echo "java archive file ${java_archive_file} does not exist" 1>&2; exit 1; }
+
+    [ -h /opt/java ] && return 0; # java already isntalled
+
+    (cd /opt; gunzip < ${java_archive_file} | tar xf -) && echo "extracted java into /opt" 1>&2 || { echo "failed to extract java" 1>&2; exit 1; }
+
+    local java_dir
+    java_dir=$(get_java_dir /opt) || exit 1
+
+    ln -s ${java_dir} /opt/java && echo "linked ${java_dir} to /opt/java" 1>&2
+}
+
+
+
+
+
 
 

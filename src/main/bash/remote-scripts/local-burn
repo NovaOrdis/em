@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# burn script - supposed to be run by root from the /tmp directory on the system that is being burned in
+# burn script - supposed to be run by root from the /tmp/.burn-in directory on the system that is being burned in
 #
 
-[ -f /tmp/em.shlib ] && . /tmp/em.shlib || { echo "/tmp/em.shlib not found" 1>&2; exit 1; }
+[ -f $(dirname $0)/em.shlib ] && . $(dirname $0)/em.shlib || { echo "$(dirname $0)/em.shlib not found" 1>&2; exit 1; }
 
 function main
 {
@@ -11,12 +11,16 @@ function main
 
     local id
     local dry_run=false
+    local java_archive_file
 
     while [ "$1" != "" ]; do
         if [ "$1" = "--debug" ]; then
             debug_off=false
         elif [ "$1" = "--dry-run" ]; then
             dry_run=true
+        elif [ "$1" = "--java" ]; then
+            shift
+            java_archive_file=$1
         elif [ "${id}" = "" ]; then
             id=$1
         fi
@@ -25,14 +29,65 @@ function main
 
     [ "${id}" = "" ] && { echo "'id' not defined" 1>&2; exit 1; }
 
+    #
+    # check pre-conditions
+    #
 
-   setup-hostname ${id}
+    local environment_private_key_file=$(dirname $0)/environment_key_1
 
+    [ -f ${environment_private_key_file} ] || { echo "environment key file ${environment_private_key_file} not found" 1>&2; exit 1; }
 
+    local environmentmanager_hosts_file=$(dirname $0)/hosts
 
+    [ -f ${environmentmanager_hosts_file} ] || { echo "environment manager's hosts file ${environmentmanager_hosts_file} not found" 1>&2; exit 1; }
+
+    local ovidiu_default_file=$(dirname $0)/ovidiu_default.pub
+
+    [ -f ${ovidiu_default_file} ] || { echo "${ovidiu_default_file} not found" 1>&2; exit 1; }
+
+    #
+    # start burn-in
+    #
+
+    local users="root ec2-user"
+
+    setup-hostname ${id}
+
+    for user in ${users}; do
+        setup-bashrc ${user}
+        setup-environment-private-key ${user} ${environment_private_key_file}
+        setup-environment-public-key ${user} ${environment_private_key_file}
+    done
+
+    # we don't need the staged environment key file, delete it
+    rm -f ${environment_private_key_file}
+
+    setup-ovidiu-defaut-public-key ${ovidiu_default_file}
+
+    update-etc-hosts-from-another-hosts-file ${environmentmanager_hosts_file}
+
+    # the environment does not know about us yet so add ourselves to the /etc/hosts file
+    update-etc-hosts ${id} $(get-ip-address)
+
+    install-package zip
+    install-package unzip
+
+    setup-nfs-client
+    link-to-ec2-host ${id} /nfs/bin
+
+    # TODO: fix this, currently the Amazon EC2 storage is screwed up
+    #mount-main-storage /opt
+
+    install_java ${java_archive_file} /nfs/archive
+
+    for user in ${users}; do
+        update-bashrc-with-java-information ${user} /opt/java
+    done
+
+    # cleanup
+    #
     # delete installation access key from authorized_hosts - this must be the last action after everything completed
     # successfully
-
 }
 
 main $@
