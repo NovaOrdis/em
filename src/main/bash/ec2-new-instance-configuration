@@ -71,28 +71,6 @@ function get_amq_dir
 }
 
 
-function setup-ec2-user-bashrc
-{
-    logical_id=$1
-    [ "${logical_id}" = "" ] && { echo "the logical id of this VM was not specified" 1>&2; exit 1; }
-
-    if ! grep -q "export MYSELF=" ~ec2-user/.bashrc; then
-        echo "" >> ~ec2-user/.bashrc
-        echo "export MYSELF=${logical_id}" >> ~ec2-user/.bashrc
-        echo "" >> ~ec2-user/.bashrc
-        echo "[ \$(whoami) = \"root\" ] && export PS1=\"root@\${MYSELF}# \" || export PS1=\"\${MYSELF}> \"" >> ~ec2-user/.bashrc
-        echo "" >> ~ec2-user/.bashrc
-        echo "alias h='history'" >> ~ec2-user/.bashrc
-        echo "alias r='sudo su -'" >> ~ec2-user/.bashrc
-        echo "alias cds='cd /nfs/f01'" >> ~ec2-user/.bashrc
-        echo "alias cdw='cd'" >> ~ec2-user/.bashrc
-        echo "" >> ~ec2-user/.bashrc
-        echo "export GLD_HOME=/nfs/f01/gld/current"  >> ~ec2-user/.bashrc
-        echo "export PATH=\${PATH}:\${GLD_HOME}/bin:/nfs/f01/bin"   >> ~ec2-user/.bashrc
-        echo "" >> ~ec2-user/.bashrc
-        echo "ec2-user .bashrc done"
-    fi
-}
 
 function setup-ssh-private-key
 {
