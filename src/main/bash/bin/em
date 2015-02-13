@@ -1,0 +1,4 @@
+#!/bin/bash
+#
+# the entry point in em. This script should be placed in PATH
+#
