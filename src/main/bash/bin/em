@@ -3,16 +3,19 @@
 # the entry point in em. This script should be placed in PATH
 #
 
-[ -f $(dirname $0)/../em.shlib ] && . $(dirname $0)/../em.shlib || { echo "$(dirname $0)/../em.shlib not found" 1>&2; exit 1; }
+[ -f $(dirname $0)/../lib/em.shlib ] && . $(dirname $0)/../lib/em.shlib || { echo "$(dirname $0)/../lib/em.shlib not found" 1>&2; exit 1; }
 
 function main
 {
     local command
     local command_args
+    local dry_run=false
 
     while [ "$1" != "" ]; do
         if [ "$1" = "--debug" ]; then
             debug_off=false
+        elif [ "$1" = "--dry-run" ]; then
+            dry_run=true
         elif [ "${command}" = "" ]; then
             command=$1
         else
@@ -25,6 +28,10 @@ function main
 
     [ ! -f $(dirname $0)/../commands/${command} ] && { echo "no such command '${command}'"; exit 1; }
 
+    ! ${debug_off} && debug_arg="--debug"
+    ${dry_run} && dry_run_arg="--dry-run"
+
+    $(dirname $0)/../commands/${command} ${debug_arg} ${dry_run_arg} ${command_args}
 
 }
 

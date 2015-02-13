@@ -1,0 +1,102 @@
+#!/bin/bash
+#
+#
+# Global variables
+#
+# debug_off=true|false
+#
+# dry_run=true|false
+#
+#
+
+
+
+# By default, without doing anything, debug is turned off.
+# To turn debugging on, set debug_off=false somewhere in the upper calling layers.
+function debug
+{
+    ${debug_off} && return 0
+    echo "$1" 1>&2;
+}
+
+function get-ids
+{
+    ids=$(cat /etc/hosts | grep -v localhost | grep -v "^ *$" | sed -e 's/^.* \(.*\)$/\1/')
+    echo ${ids}
+}
+
+# fails if the id does not exist
+function id-to-ip
+{
+    local id=$1
+
+    [ "${id}" = "" ] && { echo "'id' is not set" 1>&2; exit 1; }
+
+    local line
+    line=$(cat /etc/hosts | grep "^.* ${id}$")
+    line=${line%% *}
+    [ "${line}" = "" ] && { echo "id ${id} not known" 1>&2; exit 1; }
+    echo ${line}
+}
+
+#######################################################################################
+# Host-wide configuration
+#######################################################################################
+
+function setup-hostname
+{
+    local id=$1
+
+    debug "setup-hostname(id=$1)"
+
+    local content
+
+    content=$(cat /etc/hostname)
+    [ "${content}" = "${id}" ] && { echo "hostname is '${id}' already"; return 0; }
+
+    if ${dry_run}; then
+        echo "[dry-run]: echo \"${id}\" > /etc/hostname"
+        return 0;
+    fi
+
+    echo "${id}" > /etc/hostname && \
+        echo "setup hostname as '${id}'" || \
+        { echo "failed to write ${id} into /etc/hostname" 1>&2; exit 1; }
+}
+
+#######################################################################################
+# User Environment Configuration
+#######################################################################################
+
+function setup-bashrc
+{
+    local target_id=$1
+    local user_name=$2
+
+    debug "setup-bashrc(target_id=$1, user_name=$1)"
+}
+
+function setup-ec2-user-bashrc
+{
+    logical_id=$1
+    [ "${logical_id}" = "" ] && { echo "the logical id of this VM was not specified" 1>&2; exit 1; }
+
+    if ! grep -q "export MYSELF=" ~ec2-user/.bashrc; then
+        echo "" >> ~ec2-user/.bashrc
+        echo "export MYSELF=${logical_id}" >> ~ec2-user/.bashrc
+        echo "" >> ~ec2-user/.bashrc
+        echo "[ \$(whoami) = \"root\" ] && export PS1=\"root@\${MYSELF}# \" || export PS1=\"\${MYSELF}> \"" >> ~ec2-user/.bashrc
+        echo "" >> ~ec2-user/.bashrc
+        echo "alias h='history'" >> ~ec2-user/.bashrc
+        echo "alias r='sudo su -'" >> ~ec2-user/.bashrc
+        echo "alias cds='cd /nfs/f01'" >> ~ec2-user/.bashrc
+        echo "alias cdw='cd'" >> ~ec2-user/.bashrc
+        echo "" >> ~ec2-user/.bashrc
+        echo "export GLD_HOME=/nfs/f01/gld/current"  >> ~ec2-user/.bashrc
+        echo "export PATH=\${PATH}:\${GLD_HOME}/bin:/nfs/f01/bin"   >> ~ec2-user/.bashrc
+        echo "" >> ~ec2-user/.bashrc
+        echo "ec2-user .bashrc done"
+    fi
+}
+
+
