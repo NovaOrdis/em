@@ -1,0 +1,38 @@
+#!/bin/bash
+#
+# burn script - supposed to be run by root from the /tmp directory on the system that is being burned in
+#
+
+[ -f /tmp/em.shlib ] && . /tmp/em.shlib || { echo "/tmp/em.shlib not found" 1>&2; exit 1; }
+
+function main
+{
+    [ $(whoami) = "root" ] || { echo "this script is supposed to be executed by root, but it is executed by $(whoami)" 1>&2; exit 1; }
+
+    local id
+    local dry_run=false
+
+    while [ "$1" != "" ]; do
+        if [ "$1" = "--debug" ]; then
+            debug_off=false
+        elif [ "$1" = "--dry-run" ]; then
+            dry_run=true
+        elif [ "${id}" = "" ]; then
+            id=$1
+        fi
+        shift
+    done
+
+    [ "${id}" = "" ] && { echo "'id' not defined" 1>&2; exit 1; }
+
+
+   setup-hostname ${id}
+
+
+
+    # delete installation access key from authorized_hosts - this must be the last action after everything completed
+    # successfully
+
+}
+
+main $@
