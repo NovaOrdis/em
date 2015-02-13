@@ -11,6 +11,8 @@ function main
     local dry_run_arg
     local java_archive_file
     local java_arg
+    local amq_archive_file
+    local amq_arg
 
     while [ "$1" != "" ]; do
         if [ "$1" = "--debug" ]; then
@@ -25,6 +27,10 @@ function main
             shift
             java_archive_file=$1
             java_arg="--java ${java_archive_file}"
+        elif [ "$1" = "--amq" ]; then
+            shift
+            amq_archive_file=$1
+            amq_arg="--amq ${amq_archive_file}"
         elif [ "${id}" = "" ]; then
             id=$1
         fi
@@ -35,12 +41,14 @@ function main
     # verify pre-conditions, fail early, these coditions will be alos checked again on the remote host
     #
 
-    [ "${java_archive_file}" = "" ] && { echo "java archive file not specified. Use --java to indicate a java archive file in the archive directory ${archive_dir}" 1>&2; exit 1; }
-    [ -f ${archive_dir}/${java_archive_file} ] || { echo "java archive file ${archive_dir}/${java_archive_file} does not exist" 1>&2; exit 1; }
-
 #    local target_ip
 #    target_ip=$(id-to-ip ${id}) || exit 1
     [ "${private_ip}" = "" ] && { echo "the private IP not specified, use --private-ip" 1>&2; exit 1; }
+
+    [ "${java_archive_file}" = "" ] && { echo "java archive file not specified. Use --java to indicate a java archive file in the archive directory ${archive_dir}" 1>&2; exit 1; }
+    [ -f ${archive_dir}/${java_archive_file} ] || { echo "java archive file ${archive_dir}/${java_archive_file} does not exist" 1>&2; exit 1; }
+
+    [ "${amq_archive_file}" != "" -a ! -f ${archive_dir}/${amq_archive_file} ] && { echo "A-MQ archive file ${archive_dir}/${amq_archive_file} does not exist" 1>&2; exit 1; }
 
     # copy the installation key in a temporary location and give it the right ownership and persmissions
 
@@ -61,8 +69,8 @@ function main
     # create the burn-in directory
     ssh -q -t -i ${temp_installation_key} ec2-user@${private_ip} "[ ! -d ${burn_in_dir} ] && mkdir ${burn_in_dir}"
 
-    # copy the library on the host we're going to burn in
-    scp -q -i ${temp_installation_key} $(dirname $0)/../lib/em.shlib ec2-user@${private_ip}:${burn_in_dir}
+    # copy all libraries on the host we're going to burn in
+    scp -q -i ${temp_installation_key} $(dirname $0)/../lib/* ec2-user@${private_ip}:${burn_in_dir}
 
     # copy the driving script
     scp -q -i ${temp_installation_key} $(dirname $0)/../remote-scripts/* ec2-user@${private_ip}:${burn_in_dir}
@@ -78,7 +86,7 @@ function main
 
     # run the driving script
     ssh -q -t -i ${temp_installation_key} ec2-user@${private_ip} \
-        "chmod u+x ${burn_in_dir}/local-burn; sudo ${burn_in_dir}/local-burn ${debug_arg} ${dry_run_arg} ${java_arg} ${id}"
+        "chmod u+x ${burn_in_dir}/local-burn; sudo ${burn_in_dir}/local-burn ${debug_arg} ${dry_run_arg} ${java_arg} ${amq_arg} ${id}"
 
     # remove the burn-in directory
     ssh -q -t -i ${temp_installation_key} ec2-user@${private_ip} "rm -rf ${burn_in_dir}"
