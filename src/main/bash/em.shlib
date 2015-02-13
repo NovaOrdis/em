@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+#
+
+# By default, without doing anything, debug is turned off.
+# To turn debugging on, set debug_off=false somewhere in the upper calling layers.
+function debug
+{
+    ${debug_off} && return 0
+    echo "$1" 1>&2;
+}
+
+function get-ids
+{
+    ids=$(cat /etc/hosts | grep -v localhost | grep -v "^ *$" | sed -e 's/^.* \(.*\)$/\1/')
+    echo ${ids}
+}
+
+# fails if the id does not exist
+function get-ip
+{
+    local id=$1
+
+    [ "${id}" = "" ] && { echo "'id' is not set" 1>&2; exit 1; }
+
+    local line
+    line=$(cat /etc/hosts | grep "^.* ${id}$")
+    line=${line%% *}
+    [ "${line}" = "" ] && { echo "id ${id} not known" 1>&2; exit 1; }
+    echo ${line}
+}
+
+
