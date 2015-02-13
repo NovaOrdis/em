@@ -10,62 +10,25 @@
 #
 #
 
-# return the absolute path of the sole A-MQ directory, or empty string if no A-MQ directory
-# is found, or fail if more than one A-MQ directory is found
-function get_amq_dir
+# ex: 1g or 515m
+java_min_mem=512m
+java_max_mem=513m
+memory_usage_limit="3 gb"
+temp_usage_limit="3 gb"
+log_maxFileSize=100MB
+burn_in_dir=/tmp/.burn-in
+
+
+function install-amq
 {
-    local parent=$1
-
-    [ "${parent}" = "" ] && { echo "'parent' directory not specified" 1>&2; exit 1; }
-    [ -d ${parent} ] || { echo "'parent' ${parent} is not a directory" 1>&2; exit 1; }
-
-    local amq_dir
-
-    for i in $(ls -d ${parent}/*); do
-        if [ -d ${i} ]; then
-            local name
-            name=$(basename ${i})
-            name=${name:0:10}
-            if [ "${name}" = "jboss-a-mq" ]; then
-                [ "${amq_dir}" != "" ] && { echo "more than one A-MQ directory exist in ${parent}: ${amq_dir}, ${i}" 1>&2; exit 1; }
-                amq_dir=${i}
-            fi
-        fi
-    done
-
-    echo ${amq_dir}
-}
-
-function install_data_content
-{
-    if [ ! -f /data/bin/ec2-host ]; then
-        [ -f $(dirname $0)/ec2-host ] || { echo "$(dirname $0)/ec2-host not found, make sure to upload it" 1>&2; exit 1; }
-        cp $(dirname $0)/ec2-host /data/bin
-        chmod a+x /data/bin/ec2-host
-        echo "/data/bin/ec2-host deployed"
-    fi
-
-    if [ ! -f /data/archive/${java_archive_file} ]; then
-        [ -f $(dirname $0)/${java_archive_file} ] || { echo "$(dirname $0)/${java_archive_file} not found, make sure to upload it" 1>&2; exit 1; }
-        cp $(dirname $0)/${java_archive_file} /data/archive
-        echo "/data/archive/${java_archive_file} deployed"
-    fi
-
-    if [ ! -f /data/archive/${amq_archive_file} ]; then
-        [ -f $(dirname $0)/${amq_archive_file} ] || { echo "$(dirname $0)/${amq_archive_file} not found, make sure to upload it" 1>&2; exit 1; }
-        cp $(dirname $0)/${amq_archive_file} /data/archive
-        echo "/data/archive/${amq_archive_file} deployed"
-    fi
-}
-
-function install_amq
-{
-    logical_id=$1
-    [ "${logical_id}" = "" ] && { echo "the logical id of this VM was not specified" 1>&2; exit 1; }
+    id=$1
+    amq_archive_file=$2
+    [ "${id}" = "" ] && { echo "'id' not specified" 1>&2; exit 1; }
+    [ "${amq_archive_file}" = "" ] && { echo "'amq_archive_file' not specified" 1>&2; exit 1; }
 
     [ -h /opt/a-mq ] && return 0; # A-MQ already isntalled
 
-    local archive_dir=/nfs/f01/archive
+    local archive_dir=/nfs/archive
     [ -d ${archive_dir} ] || { echo "${archive_dir} not a directory, was the NFS client activated?" 1>&2; exit 1; }
 
     local amq_archive_path=${archive_dir}/${amq_archive_file}
@@ -77,29 +40,28 @@ function install_amq
 
     (cd /opt; ln -s ${amq_dir} a-mq) && echo "linked ${amq_dir} to /opt/a-mq"
 
-    # update ec2-user's .bashrc
+    # update root's and ec2-user's .bashrc
 
-    if ! grep -q "export AMQ_HOME=/opt/a-mq" ~ec2-user/.bashrc; then
-        echo "export AMQ_HOME=/opt/a-mq" >> ~ec2-user/.bashrc
-        echo "alias amq='cd \${AMQ_HOME}'" >> ~ec2-user/.bashrc
-        echo "alias amqb='cd \${AMQ_HOME}/bin'" >> ~ec2-user/.bashrc
-        echo "alias amql='cd \${AMQ_HOME}/data/log'" >> ~ec2-user/.bashrc
-        echo "alias amqc='cd \${AMQ_HOME}/etc'" >> ~ec2-user/.bashrc
-        echo "alias amq-start='\${AMQ_HOME}/bin/start'" >> ~ec2-user/.bashrc
-        echo "alias amq-stop='\${AMQ_HOME}/bin/stop'" >> ~ec2-user/.bashrc
-        echo "" >> ~ec2-user/.bashrc
-        echo "updated ~ec2-user/.bashrc with A-MQ configuration"
+    local users="ec2-user root"
+    for user in ${users}; do
+        local bashrc_file=$(get-home-dir ${user})/.bashrc
+        if ! grep -q "export AMQ_HOME=/opt/a-mq" ${bashrc_file}; then
+        echo "" >> ${bashrc_file}
+        echo "export AMQ_HOME=/opt/a-mq" >> ${bashrc_file}
+        echo "alias amq='cd \${AMQ_HOME}'" >> ${bashrc_file}
+        echo "alias amqb='cd \${AMQ_HOME}/bin'" >> ${bashrc_file}
+        echo "alias amql='cd \${AMQ_HOME}/data/log'" >> ${bashrc_file}
+        echo "alias amqc='cd \${AMQ_HOME}/etc'" >> ${bashrc_file}
+        echo "alias amq-start='\${AMQ_HOME}/bin/start'" >> ${bashrc_file}
+        echo "alias amq-stop='\${AMQ_HOME}/bin/stop'" >> ${bashrc_file}
+        echo "updated ${bashrc_file} with A-MQ configuration"
     fi
+    done
 
-    # update permissions
-    chgrp ec2-user /opt/a-mq/ && echo "chgrp ec2-user /opt/a-mq/"
-    chmod g+w /opt/a-mq/ && echo "chmod g+w /opt/a-mq/"
-    chgrp -R ec2-user /opt/a-mq/data && echo "chgrp -R ec2-user /opt/a-mq/data"
-    chmod -R g+w /opt/a-mq/data && echo "chmod -R g+w /opt/a-mq/data"
-    chgrp -R ec2-user /opt/a-mq/etc && echo "chgrp -R ec2-user /opt/a-mq/etc"
-    chmod -R g+w /opt/a-mq/etc && echo "chmod -R g+w /opt/a-mq/etc"
-
+    #
     # security
+    #
+
     local f
 
     f=/opt/a-mq/etc/users.properties
@@ -124,17 +86,136 @@ function install_amq
         echo "updated A-MQ security credentials in ${f}"
     fi
 
+    #
     # broker name
+    #
 
     f=/opt/a-mq/etc/org.fusesource.mq.fabric.server-default.cfg
 
     if grep -q "^broker-name=amq$" ${f}; then
-        cat ${f} | sed -e 's/^broker-name=amq$/broker-name='${logical_id}'/' > ./.tmp.txt || { echo "" 1>&2; exit 1; }
+        cat ${f} | sed -e 's/^broker-name=amq$/broker-name='${id}'/' > ./.tmp.txt || { echo "" 1>&2; exit 1; }
         mv ./.tmp.txt ${f}
         chgrp ec2-user ${f}
         chmod g+w ${f}
-        echo "updated broker-name to ${logical_id} in ${f}"
+        echo "updated broker-name to ${id} in ${f}"
     fi
+
+    #
+    # memory
+    #
+
+    [ "${java_min_mem}" = "" ] && { echo "'java_min_mem' not defined" 1>&2; exit 1; }
+    [ "${java_max_mem}" = "" ] && { echo "'java_max_mem' not defined" 1>&2; exit 1; }
+
+    local f=/opt/a-mq/bin/setenv
+
+    cat ${f} | sed \
+        -e 's/^\( *JAVA_MIN_MEM=\).*$/\1'${java_min_mem}'/' \
+        -e 's/^\( *JAVA_MAX_MEM=\).*$/\1'${java_max_mem}'/' > ${burn_in_dir}/sed.tmp || \
+            { echo "failed to sed ${f}" 1>2; exit 1; }
+    mv ${burn_in_dir}/sed.tmp ${f} && \
+        echo "set min memory to ${java_min_mem} and max memory to ${java_max_mem} in ${f}" || \
+        { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
+
+    #
+    # remove per-queue producer flow control memory limit
+    #
+
+    f=/opt/a-mq/etc/activemq.xml
+
+    cat ${f} | sed \
+        -e 's/\(^.*\) memoryLimit.*$/\1>/' > ${burn_in_dir}/sed.tmp || \
+            { echo "failed to sed ${f}" 1>2; exit 1; }
+    mv ${burn_in_dir}/sed.tmp ${f} && \
+        echo "removed memory limit on queues in ${f}" || \
+        { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
+
+    #
+    # adjust system-level memory limits
+    #
+
+    [ "${memory_usage_limit}" = "" ] && { echo "'memory_usage_limit' not defined" 1>&2; exit 1; }
+    [ "${temp_usage_limit}" = "" ] && { echo "'temp_usage_limit' not defined" 1>&2; exit 1; }
+
+    f=/opt/a-mq/etc/activemq.xml
+
+    cat ${f} | sed \
+        -e 's/\(^.*memoryUsage limit=\).*$/\1\"'"${memory_usage_limit}"'\"\/>/' \
+        -e 's/\(^.*tempUsage limit=\).*$/\1\"'"${temp_usage_limit}"'\"\/>/' > ${burn_in_dir}/sed.tmp || \
+            { echo "failed to sed ${f}" 1>2; exit 1; }
+    mv ${burn_in_dir}/sed.tmp ${f} && \
+        echo "updated memoryUsage to ${memory_usage_limit} and tempUsage to ${temp_usage_limit} in ${f}" || \
+        { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
+
+    #
+    # adjust transportConnector
+    #
+
+    f=/opt/a-mq/etc/activemq.xml
+
+    cat ${f} | sed \
+        -e 's/^\(.*transportConnector.*uri=\"tcp:\/\/\).*\(\?maximumConnections.*$\)/\1'"${id}:61616"'\2/' > ${burn_in_dir}/sed.tmp || \
+            { echo "failed to sed ${f}" 1>2; exit 1; }
+    mv ${burn_in_dir}/sed.tmp ${f} && \
+        echo "updated transportConnector to ${id}:61616 in ${f}" || \
+        { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
+
+
+    #
+    # adjust logging
+    #
+
+    [ "${log_maxFileSize}" = "" ] && { echo "'log_maxFileSize' not defined" 1>&2; exit 1; }
+
+
+    f=/opt/a-mq/etc/org.ops4j.pax.logging.cfg
+
+    cat ${f} | sed \
+        -e 's/^log4j\.appender\.out\.maxFileSize=.*$/log4j.appender.out.maxFileSize='${log_maxFileSize}'/' \
+        -e 's/^\(log4j.appender.out.maxBackupIndex=.*\)$/#\1/' > ${burn_in_dir}/sed.tmp || \
+            { echo "failed to sed ${f}" 1>2; exit 1; }
+    mv ${burn_in_dir}/sed.tmp ${f} && \
+        echo "updated logging in ${f}" || \
+        { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
+
+
+    #
+    # update permissions
+    #
+
+    chgrp ec2-user /opt/a-mq/ && echo "chgrp ec2-user /opt/a-mq/"
+    chmod g+w /opt/a-mq/ && echo "chmod g+w /opt/a-mq/"
+    chgrp -R ec2-user /opt/a-mq/data && echo "chgrp -R ec2-user /opt/a-mq/data"
+    chmod -R g+w /opt/a-mq/data && echo "chmod -R g+w /opt/a-mq/data"
+    chgrp -R ec2-user /opt/a-mq/etc && echo "chgrp -R ec2-user /opt/a-mq/etc"
+    chmod -R g+w /opt/a-mq/etc && echo "chmod -R g+w /opt/a-mq/etc"
+
+}
+
+# return the absolute path of the sole A-MQ directory, or empty string if no A-MQ directory
+# is found, or fail if more than one A-MQ directory is found
+function get_amq_dir
+{
+    local parent=$1
+
+    [ "${parent}" = "" ] && { echo "'parent' directory not specified" 1>&2; exit 1; }
+    [ -d ${parent} ] || { echo "'parent' ${parent} is not a directory" 1>&2; exit 1; }
+
+    local amq_dir
+
+    for i in $(ls -d ${parent}/*); do
+        if [ -d ${i} ]; then
+            local name
+            name=$(basename ${i})
+            name=${name:0:10}
+            if [ "${name}" = "jboss-a-mq" ]; then
+                [ "${amq_dir}" != "" ] && { echo "more than one A-MQ directory exist in ${parent}: ${amq_dir}, ${i}" 1>&2; exit 1; }
+                amq_dir=${i}
+            fi
+        fi
+    done
+
+    echo ${amq_dir}
 }
 
 

@@ -12,6 +12,7 @@ function main
     local id
     local dry_run=false
     local java_archive_file
+    local amq_archive_file
 
     while [ "$1" != "" ]; do
         if [ "$1" = "--debug" ]; then
@@ -21,6 +22,9 @@ function main
         elif [ "$1" = "--java" ]; then
             shift
             java_archive_file=$1
+        elif [ "$1" = "--amq" ]; then
+            shift
+            amq_archive_file=$1
         elif [ "${id}" = "" ]; then
             id=$1
         fi
@@ -83,6 +87,14 @@ function main
     for user in ${users}; do
         update-bashrc-with-java-information ${user} /opt/java
     done
+
+    if [ "${amq_archive_file}" != "" ]; then
+        # load the amq library
+        [ -f $(dirname $0)/amq.shlib ] && . $(dirname $0)/amq.shlib || \
+            { echo "we need to install A-MQ but we did not find the A-MQ library $(dirname $0)/amq.shlib " 1>&2; exit 1; }
+
+        install-amq ${id} ${amq_archive_file}
+    fi
 
     # cleanup
     #
