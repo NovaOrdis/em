@@ -1,11 +1,12 @@
 #!/bin/bash
 #
+# Common Library
 #
 # Global variables
 #
-# debug_off=true|false
+#       debug_off=true|false
 #
-# dry_run=true|false
+#       dry_run=true|false
 #
 #
 
@@ -467,6 +468,32 @@ function setup-nfs-client
     mount -a
 
     [ ! -d /nfs/archive ] && { echo "directory nfs/archive does not exist, which means NFS client installation did not work" 1>&2; exit 1; }
+}
+
+function setup-nfs-server
+{
+    install-package rpcbind
+    install-package nfs-utils
+
+    #
+    # share /data in /etc/exports
+    #
+
+    if ! grep -q "^/data " /etc/exports; then
+        echo "/data 172.31.16.0/20(rw,sync,no_root_squash,no_subtree_check)" >> /etc/exports && echo "declared /data in /etc/exports"
+    fi
+
+    if ! systemctl -q is-enabled nfs-server; then
+        systemctl enable nfs-server
+        echo "nfs server enabled for boot"
+    fi
+
+    if ! systemctl -q is-active nfs-server; then
+        service nfs-server start
+        echo "nfs server started"
+    fi
+
+    exportfs -a || { echo "failed to exportfs" 1>&2; exit 1; }
 }
 
 #######################################################################################

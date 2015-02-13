@@ -1,12 +1,14 @@
 #!/bin/bash
 #
-# Designed to configure a new ec2 instance after creation
+# AM-Q Installation
+#
+# Global variables
+#
+#       debug_off=true|false
+#
+#       dry_run=true|false
 #
 #
-
-environment_manager=172.31.22.204
-java_archive_file=jdk-7u75-linux-x64.tar.gz
-amq_archive_file=jboss-a-mq-6.1.0.redhat-379.zip
 
 # return the absolute path of the sole A-MQ directory, or empty string if no A-MQ directory
 # is found, or fail if more than one A-MQ directory is found
@@ -32,58 +34,6 @@ function get_amq_dir
     done
 
     echo ${amq_dir}
-}
-
-
-
-function initialize-enviornment-manager-hosts
-{
-    logical_id=$1
-    [ "${logical_id}" = "" ] && { echo "the logical id of this VM was not specified" 1>&2; exit 1; }
-
-    if ! grep -q " ${logical_id}$" /etc/hosts; then
-
-        local ip
-        ip=$(get_ip_address) || exit 1
-        echo "" >> /etc/hosts
-        echo "${ip} ${logical_id}" >> /etc/hosts
-        echo "registered ${logical_id} as ${ip} in /etc/hosts"
-    fi
-
-    chgrp ec2-user /etc/hosts
-    chmod g+w /etc/hosts
-}
-
-
-function setup-nfs-server
-{
-    local package_name=rpcbind
-    #if ! yum -q info ${package_name} > /dev/null 2>&1; then
-        yum install ${package_name} || { echo "failed to install ${package_name}" 1>&2; exit 1; }
-    #fi
-
-    local package_name=nfs-utils
-    #if ! yum -q info ${package_name} > /dev/null 2>&1; then
-        yum install ${package_name} || { echo "failed to install ${package_name}" 1>&2; exit 1; }
-    #fi
-
-    #
-    # share /data in /etc/exports
-    #
-
-    if ! grep -q "^/data " /etc/exports; then
-        echo "/data 172.31.16.0/20(rw,sync,no_root_squash,no_subtree_check)" >> /etc/exports && echo "declared /data in /etc/exports"
-    fi
-
-    if ! systemctl -q is-enabled nfs-server; then
-        systemctl enable nfs-server
-        echo "nfs server enabled for boot"
-    fi
-
-    if ! systemctl -q is-active nfs-server; then
-        service nfs-server start
-        echo "nfs server started"
-    fi
 }
 
 function install_data_content
@@ -186,66 +136,5 @@ function install_amq
         echo "updated broker-name to ${logical_id} in ${f}"
     fi
 }
-
-function main
-{
-    local logical_id
-    local amq=false
-    local partition
-
-    while [ "$1" != "" ]; do
-        if [ "$1" = "--amq" ]; then
-            amq=true
-        elif [ "$1" = "--partition" ]; then
-            shift
-            #
-            # this is when we have more than one unformatted partions
-            # it allows us to specified wich one to use
-            #
-            partition=$1
-
-            [ "${partition}" = "" ] && { echo "a partition name (ex: xvda1) should follow --partition" 1>&2; exit 1; }
-        elif [ "${logical_id}" = "" ]; then
-            logical_id=$1
-        fi
-        shift
-    done
-
-    [ "${logical_id}" = "" ] && { echo "logical ID must be specified" 1>&2; exit 1; }
-
-    [ $(whoami) = "root" ] || { echo "this script can only be run by root" 1>&2; exit 1; }
-
-    #
-    # Decide if we're a file server or a regular node
-    #
-
-    if [ "${logical_id:0:1}" != "f" ]; then
-
-        #
-        # We're a regular (A-MQ node)
-        #
-
-	    ${amq} && install_amq ${logical_id}
-
-    else
-
-        #
-        # We're a file server/Enviornment Manager
-        #
-
-  	    setup-ssh-authorized-key
-	    setup-root-bashrc
-	    initialize-enviornment-manager-hosts ${logical_id}
-	    install-zip
-	    mount-main-storage-as-data-directory ${partition}
-	    setup-nfs-server
-	    install_data_content
-	    #setup-nfs-client
-	    link-to-ec2-host ${logical_id} /data/bin
-	    install_java /data/archive
-    fi
-}
-
-main $@
 
 
