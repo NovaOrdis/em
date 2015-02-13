@@ -11,13 +11,12 @@
 #
 
 # ex: 1g or 515m
-java_min_mem=512m
-java_max_mem=513m
-memory_usage_limit="3 gb"
+java_min_mem=6g
+java_max_mem=6g
+memory_usage_limit="5 gb"
 temp_usage_limit="3 gb"
 log_maxFileSize=100MB
 burn_in_dir=/tmp/.burn-in
-
 
 function install-amq
 {

@@ -45,6 +45,7 @@ function get-ip-address
     ip=$(ifconfig eth0 | grep "inet ") || { exit 1; }
     ip=${ip#*inet }
     ip=${ip%% *}
+    ip=${ip#addr:}
     [ "${ip}" = "" ] && { echo "failed to figure out the IP address" 1>&2; exit 1; }
     echo ${ip}
 }
