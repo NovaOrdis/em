@@ -159,13 +159,36 @@ function install-amq
         echo "updated transportConnector to ${id}:61616 in ${f}" || \
         { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
 
+    #
+    # persistence
+    #
+
+    local cluster
+    if [ "${id}"="b01" -o "${id}"="b04" ]; then
+        cluster="cluster01"
+    elif [ "${id}"="b02" -o "${id}"="b05" ]; then
+        cluster="cluster02"
+    elif [ "${id}"="b03" -o "${id}"="b06" ]; then
+        cluster="cluster03"
+    else
+	echo "unknown id ${id}" 1>&2;
+        exit 1;
+    fi
+
+    f=/opt/a-mq/etc/activemq.xml
+
+    cat ${f} | sed \
+        -e 's/^.*kahaDB.*$/            <kahaDB directory="\/nfs\/'${cluster}'\/kahadb" lockKeepAlivePeriod="5000"\/>/' > ${burn_in_dir}/sed.tmp || \
+            { echo "failed to sed ${f}" 1>2; exit 1; }
+    mv ${burn_in_dir}/sed.tmp ${f} && \
+        echo "updated persistence in ${f}" || \
+        { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
 
     #
     # adjust logging
     #
 
     [ "${log_maxFileSize}" = "" ] && { echo "'log_maxFileSize' not defined" 1>&2; exit 1; }
-
 
     f=/opt/a-mq/etc/org.ops4j.pax.logging.cfg
 
@@ -176,7 +199,6 @@ function install-amq
     mv ${burn_in_dir}/sed.tmp ${f} && \
         echo "updated logging in ${f}" || \
         { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
-
 
     #
     # update permissions
