@@ -50,6 +50,24 @@ function get-ip-address
     echo ${ip}
 }
 
+# returns the group owner of the directory/file or fails with a return code 1
+function get-group
+{
+    local target=$1
+    local s
+
+    if [ -f ${target} ]; then
+        s=$(ls -l ${target})
+    elif [ -d ${target} ]; then
+        s=$(ls -ld ${target})
+    else
+        echo "failed to figure out group for ${target}" 1>&2;
+        return 1
+    fi
+
+    echo ${s} | awk '{print $4}'
+}
+
 #######################################################################################
 # Host-wide configuration
 #######################################################################################
