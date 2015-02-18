@@ -13,6 +13,8 @@ function main
     local java_arg
     local amq_archive_file
     local amq_arg
+    local eap_archive_file
+    local eap_arg
 
     while [ "$1" != "" ]; do
         if [ "$1" = "--debug" ]; then
@@ -31,6 +33,10 @@ function main
             shift
             amq_archive_file=$1
             amq_arg="--amq ${amq_archive_file}"
+        elif [ "$1" = "--eap" ]; then
+            shift
+            eap_archive_file=$1
+            eap_arg="--eap ${eap_archive_file}"
         elif [ "${id}" = "" ]; then
             id=$1
         fi
@@ -41,14 +47,28 @@ function main
     # verify pre-conditions, fail early, these coditions will be alos checked again on the remote host
     #
 
+    [ "${id}" = "" ] && { echo "[error]: the id not specified" 1>&2; exit 1; }
+
 #    local target_ip
 #    target_ip=$(id-to-ip ${id}) || exit 1
-    [ "${private_ip}" = "" ] && { echo "the private IP not specified, use --private-ip" 1>&2; exit 1; }
+    [ "${private_ip}" = "" ] && { echo "[error]: the private IP not specified, use --private-ip" 1>&2; exit 1; }
 
-    [ "${java_archive_file}" = "" ] && { echo "java archive file not specified. Use --java to indicate a java archive file in the archive directory ${archive_dir}" 1>&2; exit 1; }
-    [ -f ${archive_dir}/${java_archive_file} ] || { echo "java archive file ${archive_dir}/${java_archive_file} does not exist" 1>&2; exit 1; }
+    [ "${java_archive_file}" = "" ] && { echo "[error]: java archive file not specified. Use --java to indicate a java archive file in the archive directory ${archive_dir}" 1>&2; exit 1; }
+    [ -f ${archive_dir}/${java_archive_file} ] || { echo "[error]: java archive file ${archive_dir}/${java_archive_file} does not exist" 1>&2; exit 1; }
 
-    [ "${amq_archive_file}" != "" -a ! -f ${archive_dir}/${amq_archive_file} ] && { echo "A-MQ archive file ${archive_dir}/${amq_archive_file} does not exist" 1>&2; exit 1; }
+    [ "${amq_archive_file}" != "" -a ! -f ${archive_dir}/${amq_archive_file} ] && { echo "[error]: A-MQ archive file ${archive_dir}/${amq_archive_file} does not exist" 1>&2; exit 1; }
+
+    [ "${eap_archive_file}" != "" -a ! -f ${archive_dir}/${eap_archive_file} ] && { echo "[error]: EAP archive file ${archive_dir}/${eap_archive_file} does not exist" 1>&2; exit 1; }
+
+    #
+    # we will need to update the local /etc/hosts as part of this procedure,
+    # verify that we have sufficient permissions
+    #
+
+    [ -w /etc/hosts ] || \
+        { echo "[error]: we are running 'em $(basename $0)' as $(whoami), but this user does not have the permission to write /etc/hosts - fix this and re-run" 1>&2; exit 1; }
+
+
 
     # copy the installation key in a temporary location and give it the right ownership and persmissions
 
@@ -86,7 +106,7 @@ function main
 
     # run the driving script
     ssh -q -t -i ${temp_installation_key} ec2-user@${private_ip} \
-        "chmod u+x ${burn_in_dir}/local-burn; sudo ${burn_in_dir}/local-burn ${debug_arg} ${dry_run_arg} ${java_arg} ${amq_arg} ${id}"
+        "chmod u+x ${burn_in_dir}/local-burn; sudo ${burn_in_dir}/local-burn ${debug_arg} ${dry_run_arg} ${java_arg} ${amq_arg} ${eap_arg} ${id}"
 
     # remove the burn-in directory
     ssh -q -t -i ${temp_installation_key} ec2-user@${private_ip} "rm -rf ${burn_in_dir}"

@@ -13,6 +13,7 @@ function main
     local dry_run=false
     local java_archive_file
     local amq_archive_file
+    local eap_archive_file
 
     while [ "$1" != "" ]; do
         if [ "$1" = "--debug" ]; then
@@ -25,6 +26,9 @@ function main
         elif [ "$1" = "--amq" ]; then
             shift
             amq_archive_file=$1
+        elif [ "$1" = "--eap" ]; then
+            shift
+            eap_archive_file=$1
         elif [ "${id}" = "" ]; then
             id=$1
         fi
@@ -95,6 +99,15 @@ function main
 
         install-amq ${id} ${amq_archive_file}
     fi
+
+    if [ "${eap_archive_file}" != "" ]; then
+        # load the eap library
+        [ -f $(dirname $0)/eap.shlib ] && . $(dirname $0)/eap.shlib || \
+            { echo "we need to install EAP but we did not find the EAP library $(dirname $0)/eap.shlib " 1>&2; exit 1; }
+
+        install-eap ${id} ${amq_archive_file}
+    fi
+
 
     # cleanup
     #
