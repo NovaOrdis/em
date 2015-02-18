@@ -91,8 +91,10 @@ function update-etc-hosts
             mv /tmp/.txt /etc/hosts || { echo "failed to restore /etc/hosts" 1>&2; exit 1; }
             echo "updated /etc/hosts, replaced ${id} definition with  ${target_ip}"
         else
-            echo "${target_ip} ${id}" >> /etc/hosts
-            echo "updated /etc/hosts, added ${target_ip} ${id}"
+            echo "${target_ip} ${id}" >> /etc/hosts && \
+                echo "updated /etc/hosts, added ${target_ip} ${id}" || \
+                echo "failed to update /etc/hosts, most likely not sufficient persmissions" 1>&2;
+
         fi
     fi
 }
