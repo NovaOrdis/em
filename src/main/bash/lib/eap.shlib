@@ -149,6 +149,22 @@ function install-eap
     fi
 
     #
+    # expose the HTTP console publicly
+    #
+
+    f=${eap_dir}/standalone/configuration/standalone.xml
+
+    if grep -q "^ *<socket-binding name=\"management-http\" interface=\"management\"" ${f}; then
+        cat ${f} | sed -e 's/^\( *<socket-binding name=\"management-http\" interface=\"\)management\(\".*$\)/\1public\2/' > ${burn_in_dir}/sed.tmp || \
+            { echo "failed to sed ${f}" 1>2; exit 1; }
+        mv ${burn_in_dir}/sed.tmp ${f} && \
+            echo "exposed the HTTP console publicly in in ${f}" || { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
+    fi
+
+
+#        <socket-binding name="management-http" interface="management" port="${jboss.management.http.port:9990}"/>
+
+    #
     # update permissions
     #
 
