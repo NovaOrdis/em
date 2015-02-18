@@ -105,7 +105,7 @@ function main
         [ -f $(dirname $0)/eap.shlib ] && . $(dirname $0)/eap.shlib || \
             { echo "we need to install EAP but we did not find the EAP library $(dirname $0)/eap.shlib " 1>&2; exit 1; }
 
-        install-eap ${id} ${amq_archive_file}
+        install-eap ${id} ${eap_archive_file}
     fi
 
 
