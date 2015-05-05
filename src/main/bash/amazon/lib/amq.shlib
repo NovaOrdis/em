@@ -11,10 +11,19 @@
 #
 
 # ex: 1g or 515m
-java_min_mem=6g
-java_max_mem=6g
-memory_usage_limit="5 gb"
-temp_usage_limit="3 gb"
+
+java_min_mem=756m
+#java_min_mem=6g
+
+java_max_mem=756m
+#java_max_mem=6g
+
+memory_usage_limit="900 mb"
+#memory_usage_limit="5 gb"
+
+temp_usage_limit="900 mb"
+#temp_usage_limit="3 gb"
+
 log_maxFileSize=100MB
 burn_in_dir=/tmp/.burn-in
 
@@ -156,7 +165,7 @@ function install-amq
     local clustered=false
     f=/opt/a-mq/etc/activemq.xml
 
-    if [ ${clustered} ]; then
+    if ${clustered}; then
 
     	debug "configuring clustered persistence ..."
         local cluster
@@ -175,19 +184,20 @@ function install-amq
             -e 's/^.*kahaDB.*$/            <kahaDB directory="\/nfs\/'${cluster}'\/kahadb" lockKeepAlivePeriod="5000"\/>/' > ${burn_in_dir}/sed.tmp || \
                 { echo "failed to sed ${f}" 1>2; exit 1; }
 
+        mv ${burn_in_dir}/sed.tmp ${f} && \
+            echo "updated persistence in ${f}" || \
+            { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
+
     else
 
         debug "configuring non-clustered persistence ..."
 
-        cat ${f} | sed \
-            -e 's/^.*kahaDB.*$/            <kahaDB directory="\/opt\/a-mq\/data\/kahadb"\/>/' > ${burn_in_dir}/sed.tmp || \
-                { echo "failed to sed ${f}" 1>2; exit 1; }
+        #
+        # this is a noop, default configuration based on ${data} is good enough
+        #
 
     fi
 
-    mv ${burn_in_dir}/sed.tmp ${f} && \
-        echo "updated persistence in ${f}" || \
-        { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
 
     debug "adjusting logging ..."
 
