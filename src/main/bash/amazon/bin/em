@@ -3,7 +3,7 @@
 # the entry point in em. This script should be placed in PATH
 #
 
-[ -f $(dirname $0)/../amazon.lib/em.shlib ] && . $(dirname $0)/../lib/em.shlib || { echo "$(dirname $0)/../lib/em.shlib not found" 1>&2; exit 1; }
+[ -f $(dirname $0)/../lib/em.shlib ] && . $(dirname $0)/../lib/em.shlib || { echo "$(dirname $0)/../lib/em.shlib not found" 1>&2; exit 1; }
 
 function main
 {
