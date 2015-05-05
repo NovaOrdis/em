@@ -80,6 +80,7 @@ function setup-hostname
 
     if [ "$(hostname)" = "${id}" ]; then
         # nothing to do, return
+        debug "host name already set as ${id}"
         return 0
     fi
 
@@ -117,36 +118,9 @@ function update-etc-hosts
     fi
 }
 
-function update-etc-hosts-from-another-hosts-file
-{
-    local source_hosts_file=$1
-    [ "${source_hosts_file}" = "" ] && { echo "'source_hosts_file' not specified" 1>&2; exit 1; }
-    [ ! -f ${source_hosts_file} ] && { echo "'source_hosts_file' ${source_hosts_file} does not exist" 1>&2; exit 1; }
-
-    # copy everything that is not "localhost" into the local /etc/hosts
-    declare -a lines;
-    readarray < ${source_hosts_file} -t lines
-    local line_number=0
-    while [ ${line_number} -lt ${#lines[*]} ]; do
-        local line=${lines[${line_number}]}
-        ((line_number++))
-
-        [ "${line}" = "" ] && continue;
-        if echo ${line} | grep -q "localhost"; then
-            continue
-        fi
-
-        local ip=${line%% *}
-        local id=${line##* }
-
-        update-etc-hosts ${id} ${ip}
-    done
-    unset lines
-}
-
 #
-# This is the function that link the id to ec2-host in /nfs/amazon.bin, providing for the shortcut to
-# ssh inot the host
+# This is the function that links the id to ec2-host in /nfs/bin, providing for the shortcut to
+# ssh into the host
 #
 function link-to-ec2-host
 {
@@ -248,10 +222,12 @@ function update-bashrc-with-java-information
     local user=$1
     local java_home=$2
 
+    debug "updating .bashrc with java information ..."
+
     [ "${user}" = "" ] && { echo "'user' not provided" 1>&2; exit 1; }
     [ "${java_home}" = "" ] && { echo "'java_home' not provided" 1>&2; exit 1; }
     [ -d "${java_home}" ] || { echo "'java_home' ${java_home} does not exist" 1>&2; exit 1; }
-    [ -d "${java_home}/amazon.bin" ] || { echo "'java_home'/bin ${java_home}/bin does not exist" 1>&2; exit 1; }
+    [ -d "${java_home}/bin" ] || { echo "'java_home'/bin ${java_home}/bin does not exist" 1>&2; exit 1; }
 
     local bashrc_file="$(get-home-dir ${user})/.bashrc"
 
@@ -445,7 +421,7 @@ function mount-main-storage
         chmod g+w /data/archive
     fi
 
-    if [ ! -d /data/amazon.bin ]; then
+    if [ ! -d /data/bin ]; then
         mkdir /data/bin && echo "created /data/bin"
         chgrp ec2-user /data/bin
         chmod g+w /data/bin
@@ -475,9 +451,15 @@ function install-package
 
 function setup-nfs-client
 {
+    debug "setting up the NFS client ..."
+
     install-package nfs-utils
 
-    if [ ! -d /nfs ]; then
+    debug "nfs-utils installed"
+
+    if [ -d /nfs ]; then
+        echo "mount point /nfs already exists"
+    else
         mkdir -p /nfs && echo "created mount point /nfs" || exit 1
     fi
 
@@ -552,13 +534,16 @@ function install_java
 {
     local java_archive_name=$1
     local archive_dir=$2
+    debug "installing java ..."
     [ "${archive_dir}" = "" ] && { echo "'archive_dir' not provided" 1>&2; exit 1; }
     [ -d "${archive_dir}" ] || { echo "'archive_dir' ${archive_dir} does not exist" 1>&2; exit 1; }
 
     local java_archive_file=${archive_dir}/${java_archive_name}
     [ -f ${java_archive_file} ] || { echo "java archive file ${java_archive_file} does not exist" 1>&2; exit 1; }
 
-    [ -h /opt/java ] && return 0; # java already isntalled
+    [ -h /opt/java ] && { echo "java already installed"; return 0; }
+
+    debug "extracting java from ${java_archive_file} into /opt ..."
 
     (cd /opt; gunzip < ${java_archive_file} | tar xf -) && echo "extracted java into /opt" 1>&2 || { echo "failed to extract java" 1>&2; exit 1; }
 
@@ -567,10 +552,4 @@ function install_java
 
     ln -s ${java_dir} /opt/java && echo "linked ${java_dir} to /opt/java" 1>&2
 }
-
-
-
-
-
-
 

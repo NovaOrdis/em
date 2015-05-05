@@ -1,6 +1,6 @@
 #!/bin/bash
 
-[ -f $(dirname $0)/../amazon.lib/em.shlib ] && . $(dirname $0)/../lib/em.shlib || { echo "$(dirname $0)/../lib/em.shlib not found" 1>&2; exit 1; }
+[ -f $(dirname $0)/../lib/em.shlib ] && . $(dirname $0)/../lib/em.shlib || { echo "$(dirname $0)/../lib/em.shlib not found" 1>&2; exit 1; }
 
 function main
 {
@@ -49,8 +49,6 @@ function main
 
     [ "${id}" = "" ] && { echo "[error]: the id not specified" 1>&2; exit 1; }
 
-#    local target_ip
-#    target_ip=$(id-to-ip ${id}) || exit 1
     [ "${private_ip}" = "" ] && { echo "[error]: the private IP not specified, use --private-ip" 1>&2; exit 1; }
 
     [ "${java_archive_file}" = "" ] && { echo "[error]: java archive file not specified. Use --java to indicate a java archive file in the archive directory ${archive_dir}" 1>&2; exit 1; }
@@ -60,21 +58,25 @@ function main
 
     [ "${eap_archive_file}" != "" -a ! -f ${archive_dir}/${eap_archive_file} ] && { echo "[error]: EAP archive file ${archive_dir}/${eap_archive_file} does not exist" 1>&2; exit 1; }
 
-    #
     # we will need to update the local /etc/hosts as part of this procedure,
     # verify that we have sufficient permissions
-    #
 
     [ -w /etc/hosts ] || \
         { echo "[error]: we are running 'em $(basename $0)' as $(whoami), but this user does not have the permission to write /etc/hosts - fix this and re-run" 1>&2; exit 1; }
 
-
+    debug "figuring out our own name, it needs to be a conventional short name ..."
+    name=$(hostname)
+    if ! echo "${name}" | grep -q "^.[0-9][0-9]$"; then
+	echo "our own host name ${name} does not match the conventional pattern, fix and retry" 1>&2;
+	exit 1
+    fi
+    debug "our name is ${name}"
 
     # copy the installation key in a temporary location and give it the right ownership and persmissions
 
     local temp_installation_key=/tmp/.tmpk
 
-    cp $(dirname $0)/../../resources/installation_access.pem ${temp_installation_key} || \
+    cp $(dirname $0)/../../../resources/installation_access.pem ${temp_installation_key} || \
         { echo "failed to copy installation key into /tmp" 1>&2; exit 1; }
 
     sudo chown ec2-user:ec2-user ${temp_installation_key} || \
@@ -83,36 +85,37 @@ function main
     chmod go-rwx ${temp_installation_key} \
         || { echo "failed to chmod go-rwx installation key" 1>&2; exit 1; }
 
+    debug "environment installation key: ${temp_installation_key}"
 
     local burn_in_dir=/tmp/.burn-in
 
-    # create the burn-in directory
+    debug "creating the burn-in directory ${burn_in_dir} on ec2-user@${private_ip}"
     ssh -q -t -i ${temp_installation_key} ec2-user@${private_ip} "[ ! -d ${burn_in_dir} ] && mkdir ${burn_in_dir}"
 
-    # copy all libraries on the host we're going to burn in
-    scp -q -i ${temp_installation_key} $(dirname $0)/../lib/* ec2-user@${private_ip}:${burn_in_dir}
+    debug "copying all libraries on ec2-user@${private_ip}"
+    scp -q -i ${temp_installation_key} $(dirname $0)/../lib/* ec2-user@${private_ip}:${burn_in_dir} || exit 1
 
-    # copy the driving script
-    scp -q -i ${temp_installation_key} $(dirname $0)/../remote-scripts/* ec2-user@${private_ip}:${burn_in_dir}
+    debug "copying the driving scripts from $(dirname $0)/../remote-scripts/* to ec2-user@${private_ip}:${burn_in_dir}"
+    scp -q -i ${temp_installation_key} $(dirname $0)/../remote-scripts/* ec2-user@${private_ip}:${burn_in_dir} || exit 1
 
-    # copy the environment private key
-    scp -q -i ${temp_installation_key} ~ec2-user/.ssh/id_rsa ec2-user@${private_ip}:${burn_in_dir}/environment_key_1
+    debug "copyng the environment private key as ec2-user@${private_ip}:${burn_in_dir}/environment_key_1"
+    scp -q -i ${temp_installation_key} ~ec2-user/.ssh/id_rsa ec2-user@${private_ip}:${burn_in_dir}/environment_key_1 || exit 1
 
-    # copy the 'ovidiu_default' public key
-    scp -q -i ${temp_installation_key} $(dirname $0)/../../resources/ovidiu_default.pub ec2-user@${private_ip}:${burn_in_dir}
+    debug "copying ovidiu_default public key to ec2-user@${private_ip}:${burn_in_dir}"
+    scp -q -i ${temp_installation_key} $(dirname $0)/../../../resources/ovidiu_default.pub ec2-user@${private_ip}:${burn_in_dir} || exit 1
 
-    # copy the environment manager's /etc/hosts
-    scp -q -i ${temp_installation_key} /etc/hosts ec2-user@${private_ip}:${burn_in_dir}
+    debug "copying the environment manager's /etc/hosts"
+    scp -q -i ${temp_installation_key} /etc/hosts ec2-user@${private_ip}:${burn_in_dir} || exit 1
 
-    # run the driving script
+    debug "running the driving script ${burn_in_dir}/local-burn"
     ssh -q -t -i ${temp_installation_key} ec2-user@${private_ip} \
-        "chmod u+x ${burn_in_dir}/local-burn; sudo ${burn_in_dir}/local-burn ${debug_arg} ${dry_run_arg} ${java_arg} ${amq_arg} ${eap_arg} ${id}"
+        "chmod u+x ${burn_in_dir}/local-burn; sudo ${burn_in_dir}/local-burn ${debug_arg} ${dry_run_arg} ${java_arg} ${amq_arg} ${eap_arg} --nfs-name ${name}  --nfs-ip $(get-ip-address) ${id}" || exit 1
 
-    # remove the burn-in directory
-    ssh -q -t -i ${temp_installation_key} ec2-user@${private_ip} "rm -rf ${burn_in_dir}"
+    debug "removing the burn-in directory"
+    ssh -q -t -i ${temp_installation_key} ec2-user@${private_ip} "rm -rf ${burn_in_dir}" || exit 1
 
-    # delete the isntallation key
-    rm ${temp_installation_key} || { echo "failed to remove installation key" 1>&2; exit 1; }
+    debug "deleting the installation key"
+    rm ${temp_installation_key} || { echo "failed to remove installation key" 1>&2; exit 1; } || exit 1
 
     #
     # at this point, we know the burn in is a success, so register (or update the existing registration)

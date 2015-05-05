@@ -1,4 +1,4 @@
-#!/amazon.bin/bash
+#!/bin/bash
 #
 # burn script - supposed to be run by root from the /tmp/.burn-in directory on the system that is being burned in
 #
@@ -14,6 +14,8 @@ function main
     local java_archive_file
     local amq_archive_file
     local eap_archive_file
+    local nfs_name
+    local nfs_ip
 
     while [ "$1" != "" ]; do
         if [ "$1" = "--debug" ]; then
@@ -29,6 +31,12 @@ function main
         elif [ "$1" = "--eap" ]; then
             shift
             eap_archive_file=$1
+        elif [ "$1" = "--nfs-name" ]; then
+            shift
+            nfs_name=$1
+        elif [ "$1" = "--nfs-ip" ]; then
+            shift
+            nfs_ip=$1
         elif [ "${id}" = "" ]; then
             id=$1
         fi
@@ -36,6 +44,8 @@ function main
     done
 
     [ "${id}" = "" ] && { echo "'id' not defined" 1>&2; exit 1; }
+    [ "${nfs_name}" = "" ] && { echo "'nfs_name' not defined, use --nfs-name on command line" 1>&2; exit 1; }
+    [ "${nfs_ip}" = "" ] && { echo "'nfs_ip' not defined, use --nfs-ip on command line" 1>&2; exit 1; }
 
     #
     # check pre-conditions
@@ -57,6 +67,8 @@ function main
     # start burn-in
     #
 
+    debug "starting local burn-in ..."
+
     local users="root ec2-user"
 
     setup-hostname ${id}
@@ -72,10 +84,11 @@ function main
 
     setup-ovidiu-defaut-public-key ${ovidiu_default_file}
 
-    update-etc-hosts-from-another-hosts-file ${environmentmanager_hosts_file}
-
-    # the environment does not know about us yet so add ourselves to the /etc/hosts file
+    debug "adding ourselves in our /etc/hosts file ..."
     update-etc-hosts ${id} $(get-ip-address)
+
+    debug "adding the NFS server in our /etc/hosts file ..."
+    update-etc-hosts ${nfs_name} ${nfs_ip}
 
     install-package zip
     install-package unzip
