@@ -10,7 +10,9 @@ Starts the specified instance.
 
 Usage:
 
-    $(basename $0) <instance-name> [<instance-name> ...]
+    $(basename $0) <instance-name>
+
+Currently, the instances can be only started one at a time (TODO).
 
 EOF
 }

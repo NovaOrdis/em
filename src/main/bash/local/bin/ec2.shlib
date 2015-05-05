@@ -98,7 +98,7 @@ function update_etc_hosts()
         fi
     done
 
-    ${updated} || { echo "/etc/hosts has not been changed, it is probably up-to-date"; }
+    ${updated} || { debug "/etc/hosts has not been changed, it is probably up-to-date"; }
 
 }
 
