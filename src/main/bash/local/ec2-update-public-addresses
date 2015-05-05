@@ -1,0 +1,52 @@
+#!/bin/bash
+
+[ -f $(dirname $0)/ec2.shlib ] && . $(dirname $0)/ec2.shlib || { echo "$(dirname $0)/ec2.shlib not found" 1>&2; exit 1; }
+
+function display_help()
+{
+cat <<EOF
+
+The script queries the current Amazon EC2 region \$EC2_URL (${EC2_URL})
+with ec2-describe-instances and pulls the current public IP addresses associated running
+instances.
+
+Usage:
+
+    TODO
+
+EOF
+}
+
+function query-amazon()
+{
+    local name_and_public_ip_for_running_instances;
+
+    name_and_public_ip_for_running_instances=$(ec2-describe-instances | $(dirname $0)/em-java-launcher ${debug_arg} Ec2DescribeInstancesParser --filter state=running --output name:public-ip) || { exit 1; }
+
+    update_etc_hosts "${name_and_public_ip_for_running_instances}"
+}
+
+function main()
+{
+    local debug_arg=""
+    local debug=false
+    local dry_run=false
+
+    while [ "$1" != "" ]; do
+        if [ "$1" = "--help" -o "$1" = "-h" ]; then
+            display_help;
+            return 0;
+        elif [ "$1" = "--debug" ]; then
+            debug=true
+            debug_arg="--debug"
+        elif [ "$1" = "--dry-run" ]; then
+            dry_run=true
+        fi
+        shift
+    done
+
+    query-amazon;
+
+}
+
+main $@

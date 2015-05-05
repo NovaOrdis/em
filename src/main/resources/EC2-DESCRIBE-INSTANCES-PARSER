@@ -1,0 +1,15 @@
+Usage
+
+ec2-describe-instances | java ... com.novaordis.em.Ec2DescribeInstancesParser <options>
+
+where the options are:
+
+  --help - this help
+
+  --filter|--filters <field=value>[,....]
+
+  --output field1:field2:....
+
+    Example:
+
+            ... --filter state=running --output name:public-ip

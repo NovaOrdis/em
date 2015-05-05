@@ -1,0 +1,33 @@
+#!/bin/bash
+
+#
+# Update the /etc/hosts with the Amazon EC2 name/public IP
+#
+function update_etc_hosts()
+{
+    local name_colon_public_ip_space_separated_list=$1 # example "f01:1.1.1.1 f02:2.2.2.2"
+    local updated=false
+
+    for i in ${name_colon_public_ip_space_separated_list}; do
+        local ec2_name=${name_colon_public_ip_space_separated_list%:*}
+        local ec2_public_ip=${name_colon_public_ip_space_separated_list#*:}
+
+        # if the name is already in /etc/hosts, update it, otherwise add it at the bottom of the file
+        if grep -q ${ec2_name} /etc/hosts; then
+            cat /etc/hosts | sed -e 's/^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]* *'${ec2_name}'$/'${ec2_public_ip}" "${ec2_name}'/g' > /tmp/.sed.tmp || { echo "failed to sed"; exit 1; }
+            if diff /etc/hosts /tmp/.sed.tmp > /dev/null; then
+                # this host does not need updating, continue
+                continue;
+            fi
+            mv /tmp/.sed.tmp /etc/hosts && echo "${ec2_name} resolved to ${ec2_public_ip} in /etc/hosts" || { echo "failed to update /etc/hosts" 1>&2; exit 1; }
+            updated=true
+        else
+            echo "${ec2_public_ip} ${ec2_name}" >> /etc/hosts || { echo "failed to edit /etc/hosts" 1>&2; exit 1; }
+            updated=true
+
+        fi
+    done
+
+    ${updated} || { echo "/etc/hosts has not been changed, it is probably up-to-date"; }
+
+}

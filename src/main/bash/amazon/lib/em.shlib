@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/amazon.bin/bash
 #
 # Common Library
 #
@@ -145,7 +145,7 @@ function update-etc-hosts-from-another-hosts-file
 }
 
 #
-# This is the function that link the id to ec2-host in /nfs/bin, providing for the shortcut to
+# This is the function that link the id to ec2-host in /nfs/amazon.bin, providing for the shortcut to
 # ssh inot the host
 #
 function link-to-ec2-host
@@ -251,7 +251,7 @@ function update-bashrc-with-java-information
     [ "${user}" = "" ] && { echo "'user' not provided" 1>&2; exit 1; }
     [ "${java_home}" = "" ] && { echo "'java_home' not provided" 1>&2; exit 1; }
     [ -d "${java_home}" ] || { echo "'java_home' ${java_home} does not exist" 1>&2; exit 1; }
-    [ -d "${java_home}/bin" ] || { echo "'java_home'/bin ${java_home}/bin does not exist" 1>&2; exit 1; }
+    [ -d "${java_home}/amazon.bin" ] || { echo "'java_home'/bin ${java_home}/bin does not exist" 1>&2; exit 1; }
 
     local bashrc_file="$(get-home-dir ${user})/.bashrc"
 
@@ -445,7 +445,7 @@ function mount-main-storage
         chmod g+w /data/archive
     fi
 
-    if [ ! -d /data/bin ]; then
+    if [ ! -d /data/amazon.bin ]; then
         mkdir /data/bin && echo "created /data/bin"
         chgrp ec2-user /data/bin
         chmod g+w /data/bin

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/amazon.bin/bash
 #
 # burn script - supposed to be run by root from the /tmp/.burn-in directory on the system that is being burned in
 #
