@@ -22,10 +22,15 @@ function install-amq
 {
     id=$1
     amq_archive_file=$2
+
+    debug "installing AMQ ..."
+
     [ "${id}" = "" ] && { echo "'id' not specified" 1>&2; exit 1; }
     [ "${amq_archive_file}" = "" ] && { echo "'amq_archive_file' not specified" 1>&2; exit 1; }
 
-    [ -h /opt/a-mq ] && return 0; # A-MQ already isntalled
+    local amq_link=/opt/a-mq
+
+    [ -h ${amq_link} ] && { echo "AMQ already installed as ${amq_link}";  return 0; } 
 
     local archive_dir=/nfs/archive
     [ -d ${archive_dir} ] || { echo "${archive_dir} not a directory, was the NFS client activated?" 1>&2; exit 1; }
@@ -33,6 +38,7 @@ function install-amq
     local amq_archive_path=${archive_dir}/${amq_archive_file}
     [ -f ${amq_archive_path} ] || { echo "A-MQ archive ${amq_archive_path} does not exist" 1>&2; exit 1; }
 
+    debug "extracting ${amq_archive_path} into /opt ..."
     (cd /opt; unzip -q ${amq_archive_path}) && echo "extracted A-MQ into /opt" || { echo "failed to extract A-MQ" 1>&2; exit 1; }
 
     amq_dir=$(get_amq_dir /opt)
@@ -57,9 +63,7 @@ function install-amq
     fi
     done
 
-    #
-    # security
-    #
+    debug "setting up AMQ security ..."
 
     local f
 
@@ -85,9 +89,7 @@ function install-amq
         echo "updated A-MQ security credentials in ${f}"
     fi
 
-    #
-    # broker name
-    #
+    debug "setting broker name to ${id} ..."
 
     f=/opt/a-mq/etc/org.fusesource.mq.fabric.server-default.cfg
 
@@ -99,9 +101,7 @@ function install-amq
         echo "updated broker-name to ${id} in ${f}"
     fi
 
-    #
-    # memory
-    #
+    debug "configuring broker memory ..."
 
     [ "${java_min_mem}" = "" ] && { echo "'java_min_mem' not defined" 1>&2; exit 1; }
     [ "${java_max_mem}" = "" ] && { echo "'java_max_mem' not defined" 1>&2; exit 1; }
@@ -116,9 +116,7 @@ function install-amq
         echo "set min memory to ${java_min_mem} and max memory to ${java_max_mem} in ${f}" || \
         { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
 
-    #
-    # remove per-queue producer flow control memory limit
-    #
+    debug "removing per-queue producer flow control memory limit ..."
 
     f=/opt/a-mq/etc/activemq.xml
 
@@ -129,9 +127,7 @@ function install-amq
         echo "removed memory limit on queues in ${f}" || \
         { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
 
-    #
-    # adjust system-level memory limits
-    #
+    debug "adjust system-level memory limits ..."
 
     [ "${memory_usage_limit}" = "" ] && { echo "'memory_usage_limit' not defined" 1>&2; exit 1; }
     [ "${temp_usage_limit}" = "" ] && { echo "'temp_usage_limit' not defined" 1>&2; exit 1; }
@@ -146,9 +142,7 @@ function install-amq
         echo "updated memoryUsage to ${memory_usage_limit} and tempUsage to ${temp_usage_limit} in ${f}" || \
         { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
 
-    #
-    # adjust transportConnector
-    #
+    debug "configuring transportConnector ..."
 
     f=/opt/a-mq/etc/activemq.xml
 
@@ -159,23 +153,24 @@ function install-amq
         echo "updated transportConnector to ${id}:61616 in ${f}" || \
         { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
 
-    #
-    # persistence
-    #
+    local clustered=false
 
-    local cluster
-    if [ "${id}"="b01" -o "${id}"="b04" ]; then
-        cluster="cluster01"
-    elif [ "${id}"="b02" -o "${id}"="b05" ]; then
-        cluster="cluster02"
-    elif [ "${id}"="b03" -o "${id}"="b06" ]; then
-        cluster="cluster03"
-    else
-	echo "unknown id ${id}" 1>&2;
-        exit 1;
-    fi
+    if [ ${clustered} ]; then
 
-    f=/opt/a-mq/etc/activemq.xml
+    	debug "configuring clustered persistence ..."
+        local cluster
+        if [ "${id}"="b01" -o "${id}"="b04" ]; then
+            cluster="cluster01"
+        elif [ "${id}"="b02" -o "${id}"="b05" ]; then
+            cluster="cluster02"
+        elif [ "${id}"="b03" -o "${id}"="b06" ]; then
+            cluster="cluster03"
+        else
+	    echo "unknown id ${id}" 1>&2;
+            exit 1;
+        fi
+
+        f=/opt/a-mq/etc/activemq.xml
 
     cat ${f} | sed \
         -e 's/^.*kahaDB.*$/            <kahaDB directory="\/nfs\/'${cluster}'\/kahadb" lockKeepAlivePeriod="5000"\/>/' > ${burn_in_dir}/sed.tmp || \

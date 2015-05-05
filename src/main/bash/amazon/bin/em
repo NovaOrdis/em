@@ -26,7 +26,7 @@ function main
 
     debug "command: ${command} args: ${command_args}"
 
-    [ ! -f $(dirname $0)/../amazon.commands/${command} ] && { echo "no such command '${command}'"; exit 1; }
+    [ ! -f $(dirname $0)/../commands/${command} ] && { echo "no such command '${command}'"; exit 1; }
 
     ! ${debug_off} && debug_arg="--debug"
     ${dry_run} && dry_run_arg="--dry-run"
