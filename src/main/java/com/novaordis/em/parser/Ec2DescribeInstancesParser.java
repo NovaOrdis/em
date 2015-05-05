@@ -4,6 +4,8 @@ import com.novaordis.em.UserErrorException;
 import com.novaordis.em.model.Filter;
 import com.novaordis.em.model.Instance;
 import com.novaordis.em.model.InstanceField;
+import com.novaordis.em.output.Output;
+import com.novaordis.em.output.OutputFormat;
 import org.apache.log4j.Logger;
 
 import java.io.BufferedReader;
@@ -47,50 +49,12 @@ public class Ec2DescribeInstancesParser
         }
     }
 
-    /**
-     * This is the layer that replaces non-existent values (null) with "N/A".
-     */
-    public static void output(PrintStream out, List<InstanceField> outputFields, List<Instance> instances)
-    {
-        boolean output = false;
-        for(Iterator<Instance> i = instances.iterator(); i.hasNext(); )
-        {
-            Instance instance = i.next();
-
-            for(Iterator<InstanceField> fi = outputFields.iterator(); fi.hasNext(); )
-            {
-                InstanceField f = fi.next();
-
-                String s = f.fromInstance(instance);
-                s = s == null ? "N/A" : s;
-
-                out.print(s);
-                output = true;
-
-                if (fi.hasNext())
-                {
-                    out.print(':');
-                }
-            }
-
-            if (i.hasNext())
-            {
-                out.print(' ');
-            }
-        }
-
-        if (output)
-        {
-            out.print('\n');
-            out.flush();
-        }
-    }
-
     // Attributes ------------------------------------------------------------------------------------------------------
 
     private List<Instance> instances;
     private List<InstanceField> outputFields;
     private List<Filter> filters;
+    private OutputFormat outputFormat;
 
     // Constructors ----------------------------------------------------------------------------------------------------
 
@@ -136,7 +100,7 @@ public class Ec2DescribeInstancesParser
             throw new IllegalStateException("no 'ec2-describe-instances' command output was parsed");
         }
 
-        output(out, outputFields, instances);
+        Output.render(out, outputFormat, outputFields, instances);
     }
 
     public List<Filter> getFilters()
@@ -190,14 +154,15 @@ public class Ec2DescribeInstancesParser
     {
         for(int i = 0; i < args.length; i ++)
         {
-            if ("--output".equalsIgnoreCase(args[i]))
+            if ("--list".equalsIgnoreCase(args[i]) || "--table".equalsIgnoreCase(args[i]))
             {
                 if (i == args.length - 1)
                 {
-                    throw new UserErrorException("a format specification should follow --output");
+                    throw new UserErrorException("a format specification (output fields) should follow " + args[i]);
                 }
 
-                setOutputFormat(args[++ i]);
+                outputFormat = OutputFormat.valueOf(args[i].substring(2));
+                setOutputFields(args[++i]);
             }
             else if ("--filter".equalsIgnoreCase(args[i]) || "--filters".equalsIgnoreCase(args[i]))
             {
@@ -208,10 +173,14 @@ public class Ec2DescribeInstancesParser
 
                 setFilters(args[++i]);
             }
+            else
+            {
+                throw new UserErrorException("unknown argument: '" + args[i] + "'");
+            }
         }
     }
 
-    private void setOutputFormat(String arg) throws UserErrorException
+    private void setOutputFields(String arg) throws UserErrorException
     {
         StringTokenizer st = new StringTokenizer(arg, ":");
 

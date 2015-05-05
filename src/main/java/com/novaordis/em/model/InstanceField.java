@@ -5,6 +5,24 @@ import java.net.InetAddress;
 /**
  * @author <a href="mailto:ovidiu@novaordis.com">Ovidiu Feodorov</a>
  *
+ * Fields that are not handled yet:
+ *
+ * "Amazon Machine Image": "ami-4dbf9e7d" (Red Hat Enterpirse Linux 7.1 (HVM) SSD volume type), etc.
+ *
+ * "Root device type": "ebs"
+ *
+ * "Virtualization type: "hvm"
+ *
+ * "Instance type": t2.micro, t2.small, c4.large, etc.
+ *
+ * "Network" Virtual Private Cloud vpc-69de730c
+ *
+ * "Subnet" subnet-53993c24 default in us-west-2b
+ *
+ *
+ *
+ *
+ *
  * Copyright 2015 Nova Ordis LLC
  */
 public enum InstanceField
@@ -23,6 +41,11 @@ public enum InstanceField
     }
 
     public String getCommandLineLiteral()
+    {
+        return commandLineLiteral;
+    }
+
+    public String getOutputLiteral()
     {
         return commandLineLiteral;
     }
@@ -61,7 +84,7 @@ public enum InstanceField
     }
 
     /**
-     * @return null if the instance does not have the field we're trying to get and convert to string.
+     * @return the string rendering of the field or null if the instance does not have the field we're trying to get.
      */
     public String fromInstance(Instance instance)
     {
@@ -115,7 +138,14 @@ public enum InstanceField
         }
         else if (STATE.equals(this))
         {
-            return instance.getState().toString();
+            InstanceState state = instance.getState();
+
+            if (state == null)
+            {
+                return null;
+            }
+
+            return state.toString();
         }
         else
         {

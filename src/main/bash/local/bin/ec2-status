@@ -20,7 +20,7 @@ function main()
 {
     process_common_options $@
 
-    ec2-describe-instances | $(dirname $0)/em-java-launcher ${debug_arg} Ec2DescribeInstancesParser --output name:state:public-ip
+    ec2-describe-instances | $(dirname $0)/em-java-launcher ${debug_arg} Ec2DescribeInstancesParser --table name:state:public-ip
 
 }
 

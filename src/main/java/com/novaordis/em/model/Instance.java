@@ -41,6 +41,7 @@ public class Instance
         {
             throw new IllegalArgumentException("illegal attempt to replace ID '" + this.id + "' with '" + id + "'");
         }
+
         this.id = id;
     }
 

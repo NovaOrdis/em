@@ -1,0 +1,30 @@
+#!/bin/bash
+
+[ -f $(dirname $0)/ec2.shlib ] && . $(dirname $0)/ec2.shlib || { echo "$(dirname $0)/ec2.shlib not found" 1>&2; exit 1; }
+
+function display_help()
+{
+cat <<EOF
+
+Starts the specified instance.
+
+Usage:
+
+    $(basename $0) <instance-name> [<instance-name> ...]
+
+EOF
+}
+
+function main()
+{
+    process_common_options $@
+
+    [ "${args}" = "" ] && { display_help; exit 1; }
+
+    local name_to_id_mapping=$(ec2-describe-instances | $(dirname $0)/em-java-launcher ${debug_arg} Ec2DescribeInstancesParser --output name:id) || { exit 1; }
+
+    echo ${name_to_id_mapping}
+
+}
+
+main $@

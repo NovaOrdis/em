@@ -8,8 +8,19 @@ where the options are:
 
   --filter|--filters <field=value>[,....]
 
-  --output field1:field2:....
+  --list - outputs a space separated list
+
+            --list field1:field2:....
 
     Example:
 
-            ... --filter state=running --output name:public-ip
+            ... --filter state=running --list name:public-ip
+
+
+  --table - outputs a table with headers
+
+            --table field1:field2:....
+
+    Example:
+
+            ... --filter state=running --table name:public-ip

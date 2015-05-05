@@ -4,6 +4,7 @@ import org.apache.log4j.Logger;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 /**
@@ -100,6 +101,29 @@ public class InstanceFieldTest
         i.setPublicIp("54.149.178.21");
         String s = field.fromInstance(i);
         assertEquals("54.149.178.21", s);
+    }
+
+    // STATE -----------------------------------------------------------------------------------------------------------
+
+    @Test
+    public void STATE() throws Exception
+    {
+        InstanceField field = InstanceField.toInstanceField("state");
+        assertEquals(InstanceField.STATE, field);
+        Instance i = new Instance("i-0ea9c7f8");
+        i.setState(InstanceState.running);
+        String s = field.fromInstance(i);
+        assertEquals("running", s);
+    }
+
+    @Test
+    public void null_STATE() throws Exception
+    {
+        InstanceField field = InstanceField.toInstanceField("state");
+        Instance i = new Instance("i-0ea9c7f8");
+        assertNull(i.getState());
+        String s = field.fromInstance(i);
+        assertNull(s);
     }
 
     // Package protected -----------------------------------------------------------------------------------------------

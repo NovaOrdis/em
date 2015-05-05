@@ -163,8 +163,14 @@ public class InstanceParser
             throw new IllegalArgumentException("expecting 'Name' on position 3 and got '" + nameLabel + "'");
         }
 
-        String name = tokens[4].trim();
-        instance.setName(name);
+        if (tokens.length >= 5)
+        {
+            String name = tokens[4].trim();
+            if (name.length() > 0)
+            {
+                instance.setName(name);
+            }
+        }
     }
 
     /**

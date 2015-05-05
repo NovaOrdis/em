@@ -9,6 +9,7 @@ import java.net.InetAddress;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -140,6 +141,8 @@ public class InstanceParserTest
         assertEquals(InetAddress.getByName("52.24.116.231"), instance.getPublicIp());
     }
 
+    // parseTag() ------------------------------------------------------------------------------------------------------
+
     @Test
     public void parseTag() throws Exception
     {
@@ -154,6 +157,23 @@ public class InstanceParserTest
         assertEquals("i-db0ab82d", i.getId());
         assertEquals("f01", i.getName());
     }
+
+    @Test
+    public void parseTag_NoName() throws Exception
+    {
+        String input="TAG\tinstance\ti-8de9807b\tName\t\n";
+
+        InstanceParser p = new InstanceParser();
+
+        p.parseTag(input);
+
+        Instance i = p.getInstance();
+
+        assertEquals("i-8de9807b", i.getId());
+        assertNull(i.getName());
+    }
+
+    // parseNicAssociation() -------------------------------------------------------------------------------------------
 
     @Test
     public void parseNicAssociation() throws Exception

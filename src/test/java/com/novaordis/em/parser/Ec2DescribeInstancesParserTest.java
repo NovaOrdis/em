@@ -12,8 +12,6 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.io.StringReader;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -38,15 +36,31 @@ public class Ec2DescribeInstancesParserTest
 
     // Public ----------------------------------------------------------------------------------------------------------
 
-    // command line arguments: --output --------------------------------------------------------------------------------
+    // command line arguments ------------------------------------------------------------------------------------------
 
     @Test
-    public void commandLine_NothingFollowsOutput() throws Exception
+    public void commandLine_UnknownArgument() throws Exception
     {
         try
         {
-            new Ec2DescribeInstancesParser(new String[]{"--output"});
-            fail("nothing follows --output, should fail with UserErrorException");
+            new Ec2DescribeInstancesParser(new String[]{"--no-such-argument"});
+            fail("unknown argument, should fail with UserErrorException");
+        }
+        catch(UserErrorException e)
+        {
+            log.info(e.getMessage());
+        }
+    }
+
+   // command line arguments: --output ---------------------------------------------------------------------------------
+
+    @Test
+    public void commandLine_NothingFollowsList() throws Exception
+    {
+        try
+        {
+            new Ec2DescribeInstancesParser(new String[]{"--list"});
+            fail("nothing follows --list, should fail with UserErrorException");
         }
         catch(UserErrorException e)
         {
@@ -55,9 +69,9 @@ public class Ec2DescribeInstancesParserTest
     }
 
     @Test
-    public void commandLine_CorrectOutput() throws Exception
+    public void commandLine_CorrectList() throws Exception
     {
-        Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(new String[]{"--output", "name:public-ip"});
+        Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(new String[]{"--list", "name:public-ip"});
 
         List<InstanceField> fields = p.getOutputFields();
 
@@ -85,6 +99,17 @@ public class Ec2DescribeInstancesParserTest
 
     @Test
     public void commandLine_FilterOutput() throws Exception
+    {
+        Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(new String[]{"--filter", "state=running"});
+
+        List<Filter> filters = p.getFilters();
+
+        assertEquals(1, filters.size());
+
+    }
+
+    @Test
+    public void commandLine_FiltersOutput() throws Exception
     {
         Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(new String[]{"--filters", "state=running"});
 
@@ -176,58 +201,6 @@ public class Ec2DescribeInstancesParserTest
         assertEquals(InstanceState.running, instance2.getState());
     }
 
-    // output ----------------------------------------------------------------------------------------------------------
-
-    @Test
-    public void output_EmptyInstanceList() throws Exception
-    {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        PrintStream ps = new PrintStream(baos);
-
-        List<InstanceField> fields = Arrays.asList(InstanceField.NAME);
-
-        Ec2DescribeInstancesParser.output(ps, fields, new ArrayList<Instance>());
-
-        ps.close();
-
-        assertEquals(0, baos.toByteArray().length);
-    }
-
-    @Test
-    public void output() throws Exception
-    {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        PrintStream ps = new PrintStream(baos);
-
-        List<InstanceField> fields = Arrays.asList(InstanceField.ID);
-        List<Instance> instances = Arrays.asList(new Instance("i-db0ab82d"), new Instance("i-0ea9c7f8"));
-
-        Ec2DescribeInstancesParser.output(ps, fields, instances);
-
-        ps.close();
-
-        String output = new String(baos.toByteArray());
-        assertEquals("i-db0ab82d i-0ea9c7f8\n", output);
-    }
-
-    @Test
-    public void output_NonExistentValues() throws Exception
-    {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        PrintStream ps = new PrintStream(baos);
-
-        List<InstanceField> fields = Arrays.asList(InstanceField.NAME);
-        List<Instance> instances = Arrays.asList(new Instance("i-db0ab82d"), new Instance("i-0ea9c7f8"));
-
-        // we did not specify a name, we expect "N/A N/A\n"
-
-        Ec2DescribeInstancesParser.output(ps, fields, instances);
-
-        ps.close();
-
-        String output = new String(baos.toByteArray());
-        assertEquals("N/A N/A\n", output);
-    }
 
     // end-to-end with filters and output ------------------------------------------------------------------------------
 
@@ -255,7 +228,7 @@ public class Ec2DescribeInstancesParserTest
         BufferedReader br = new BufferedReader(new StringReader(input));
 
         Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(
-            new String[] {"--filters", "state=running", "--output", "name:state:public-ip"});
+            new String[] {"--filters", "state=running", "--list", "name:state:public-ip"});
 
         p.parse(br);
 

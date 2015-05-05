@@ -23,7 +23,7 @@ function main()
 
     local name_and_public_ip_for_running_instances;
 
-    name_and_public_ip_for_running_instances=$(ec2-describe-instances | $(dirname $0)/em-java-launcher ${debug_arg} Ec2DescribeInstancesParser --filter state=running --output name:public-ip) || { exit 1; }
+    name_and_public_ip_for_running_instances=$(ec2-describe-instances | $(dirname $0)/em-java-launcher ${debug_arg} Ec2DescribeInstancesParser --filter state=running --list name:public-ip) || { exit 1; }
 
     debug "name_and_public_ip_for_running_instances: ${name_and_public_ip_for_running_instances}"
 
