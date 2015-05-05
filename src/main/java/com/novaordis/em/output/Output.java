@@ -9,7 +9,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Static methods to render information to console.
+ * Static methods to render information as lists, tables, etc. to console.
  *
  * @author <a href="mailto:ovidiu@novaordis.com">Ovidiu Feodorov</a>
  *

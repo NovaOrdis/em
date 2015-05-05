@@ -8,5 +8,6 @@ package com.novaordis.em.model;
 public enum InstanceState
 {
     stopped,
-    running;
+    running,
+    pending;
 }

@@ -21,9 +21,16 @@ function main()
 
     [ "${args}" = "" ] && { display_help; exit 1; }
 
-    local name_to_id_mapping=$(ec2-describe-instances | $(dirname $0)/em-java-launcher ${debug_arg} Ec2DescribeInstancesParser --output name:id) || { exit 1; }
+    local name
+    for i in ${args}; do
+        [ "${name}" = "" ] && name=${i} || fail "currently we only support starting one instance at a time"
+    done
 
-    echo ${name_to_id_mapping}
+    local id=$(ec2-describe-instances | $(dirname $0)/em-java-launcher ${debug_arg} Ec2DescribeInstancesParser --filter name=${name} --list id) || { exit 1; }
+
+    info "starting ${id} ..."
+
+    ec2-start-instances ${id}
 
 }
 

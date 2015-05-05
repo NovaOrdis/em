@@ -15,6 +15,10 @@ args=""
 # dry_run and dry_run_arg and acts on "--help" by executing display_help. The remaning arguments are set as
 # a space separated ${args} global variable
 #
+# Usage:
+#
+#        process_common_options $@
+#
 function process_common_options()
 {
     local help=false
@@ -49,6 +53,17 @@ function info()
     echo "$@" 1>&2;
 }
 
+# sends the arguments at stderr and exits with 1
+function fail()
+{
+    echo "$@" 1>&2;
+    exit 1
+}
+
+########################################################################################################################
+#  /etc/hosts functions
+########################################################################################################################
+
 #
 # Update the /etc/hosts with the Amazon EC2 name/public IP
 #
@@ -58,23 +73,27 @@ function update_etc_hosts()
     local updated=false
 
     for i in ${name_colon_public_ip_space_separated_list}; do
-        local ec2_name=${i%:*}
-        local ec2_public_ip=${i#*:}
+        local name=${i%:*}
+        local public_ip=${i#*:}
 
-        ${debug} && echo "ec2_name: ${ec2_name}" 1>&2;
-        ${debug} && echo "ec2_public_ip: ${ec2_public_ip}" 1>&2;
+        debug "name: ${name}, public_ip: ${public_ip}"
 
-        # if the name is already in /etc/hosts, update it, otherwise add it at the bottom of the file
-        if grep -q ${ec2_name} /etc/hosts; then
-            cat /etc/hosts | sed -e 's/^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]* *'${ec2_name}'$/'${ec2_public_ip}" "${ec2_name}'/g' > /tmp/.sed.tmp || { echo "failed to sed"; exit 1; }
+        if grep -q ${name} /etc/hosts; then
+            #
+            # the name is already in /etc/hosts, need to update it
+            #
+            cat /etc/hosts | sed -e 's/^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]* *'${name}'$/'${public_ip}" "${name}'/g' > /tmp/.sed.tmp || fail "failed to sed /etc/hosts"
             if diff /etc/hosts /tmp/.sed.tmp > /dev/null; then
                 # this host does not need updating, continue
                 continue;
             fi
-            mv /tmp/.sed.tmp /etc/hosts && echo "${ec2_name} resolved to ${ec2_public_ip} in /etc/hosts" || { echo "failed to update /etc/hosts" 1>&2; exit 1; }
+            mv /tmp/.sed.tmp /etc/hosts && info "${name} resolved to ${public_ip} in /etc/hosts" || fail "failed to update /etc/hosts"
             updated=true
         else
-            echo "${ec2_public_ip} ${ec2_name}" >> /etc/hosts || { echo "failed to edit /etc/hosts" 1>&2; exit 1; }
+            #
+            # the name is not in /etc/hosts, add it to the bottom of the file
+            #
+            echo "${public_ip} ${name}" >> /etc/hosts && info "${name} resolved to ${public_ip} in /etc/hosts" || fail "failed to update /etc/hosts"
             updated=true
         fi
     done
@@ -82,3 +101,20 @@ function update_etc_hosts()
     ${updated} || { echo "/etc/hosts has not been changed, it is probably up-to-date"; }
 
 }
+
+#
+# returns the IP for the given host name from /etc/hosts at stdout or the empty string if the host name not found
+#
+function ip_from_etc_hosts
+{
+    local name=$1
+
+    [ "${name}" = "" ] && fail "'name' not specified"
+
+    local ip
+
+    ip=$(cat /etc/hosts | grep "^.* ${name}$") || fail "failed to look up IP address for ${name} in /etc/hosts"
+    ip=${ip% *}
+    echo ${ip}
+}
+
