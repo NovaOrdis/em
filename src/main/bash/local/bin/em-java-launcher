@@ -19,7 +19,7 @@ function main()
     done
 
 classpath="\
-$(dirname $0)/../../../../target/em-1.0-SNAPSHOT.jar:\
+$(dirname $0)/../../../../../target/em-1.0-SNAPSHOT.jar:\
 $(dirname $0):\
 ${M2}/log4j/log4j/1.2.17/log4j-1.2.17.jar"
 

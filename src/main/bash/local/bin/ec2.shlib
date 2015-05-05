@@ -1,5 +1,54 @@
 #!/bin/bash
 
+
+#
+# global variables
+#
+debug=false
+debug_arg=""
+dry_run=false
+dry_run_arg=""
+args=""
+
+#
+# processes common options (like --debug, --dry-run or --help/-h. Sets global variables for debug, debug_arg,
+# dry_run and dry_run_arg and acts on "--help" by executing display_help. The remaning arguments are set as
+# a space separated ${args} global variable
+#
+function process_common_options()
+{
+    local help=false
+
+    while [ "$1" != "" ]; do
+        if [ "$1" = "--help" -o "$1" = "-h" ]; then
+            help=true;
+        elif [ "$1" = "--debug" ]; then
+            debug=true
+            debug_arg="--debug"
+        elif [ "$1" = "--dry-run" ]; then
+            dry_run=true
+            dry_run_arg="--dry-run"
+        else
+            [ "${args}" = "" ] && args=$1 || args="${args} $1"
+        fi
+        shift
+    done
+
+    # function display_help must be defined before process_common_options is called.
+
+    ${help} && { display_help; exit 0; }
+}
+
+function debug()
+{
+    ${debug} && echo "$@" 1>&2;
+}
+
+function info()
+{
+    echo "$@" 1>&2;
+}
+
 #
 # Update the /etc/hosts with the Amazon EC2 name/public IP
 #

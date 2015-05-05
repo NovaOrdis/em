@@ -1,0 +1,27 @@
+#!/bin/bash
+
+[ -f $(dirname $0)/ec2.shlib ] && . $(dirname $0)/ec2.shlib || { echo "$(dirname $0)/ec2.shlib not found" 1>&2; exit 1; }
+
+function display_help()
+{
+cat <<EOF
+
+The script queries the current Amazon EC2 region \$EC2_URL (${EC2_URL})
+with ec2-describe-instances and displays the current instance situation.
+
+Usage:
+
+    TODO
+
+EOF
+}
+
+function main()
+{
+    process_common_options $@
+
+    ec2-describe-instances | $(dirname $0)/em-java-launcher ${debug_arg} Ec2DescribeInstancesParser --output name:state:public-ip
+
+}
+
+main $@
