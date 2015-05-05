@@ -23,7 +23,13 @@ function query-amazon()
 
     name_and_public_ip_for_running_instances=$(ec2-describe-instances | $(dirname $0)/em-java-launcher ${debug_arg} Ec2DescribeInstancesParser --filter state=running --output name:public-ip) || { exit 1; }
 
-    update_etc_hosts "${name_and_public_ip_for_running_instances}"
+    ${debug} && echo "name_and_public_ip_for_running_instances: ${name_and_public_ip_for_running_instances}" 1>&2;
+
+    if [ "${name_and_public_ip_for_running_instances}" = "" ]; then
+        echo "no running hosts"
+    else
+        update_etc_hosts "${name_and_public_ip_for_running_instances}"
+    fi
 }
 
 function main()
