@@ -1,4 +1,4 @@
-#!/amazon.bin/bash
+#!/bin/bash
 #
 # AM-Q Installation
 #
@@ -154,6 +154,7 @@ function install-amq
         { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
 
     local clustered=false
+    f=/opt/a-mq/etc/activemq.xml
 
     if [ ${clustered} ]; then
 
@@ -170,18 +171,25 @@ function install-amq
             exit 1;
         fi
 
-        f=/opt/a-mq/etc/activemq.xml
+        cat ${f} | sed \
+            -e 's/^.*kahaDB.*$/            <kahaDB directory="\/nfs\/'${cluster}'\/kahadb" lockKeepAlivePeriod="5000"\/>/' > ${burn_in_dir}/sed.tmp || \
+                { echo "failed to sed ${f}" 1>2; exit 1; }
 
-    cat ${f} | sed \
-        -e 's/^.*kahaDB.*$/            <kahaDB directory="\/nfs\/'${cluster}'\/kahadb" lockKeepAlivePeriod="5000"\/>/' > ${burn_in_dir}/sed.tmp || \
-            { echo "failed to sed ${f}" 1>2; exit 1; }
+    else
+
+        debug "configuring non-clustered persistence ..."
+
+        cat ${f} | sed \
+            -e 's/^.*kahaDB.*$/            <kahaDB directory="\/opt\/a-mq\/data\/kahadb"\/>/' > ${burn_in_dir}/sed.tmp || \
+                { echo "failed to sed ${f}" 1>2; exit 1; }
+
+    fi
+
     mv ${burn_in_dir}/sed.tmp ${f} && \
         echo "updated persistence in ${f}" || \
         { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
 
-    #
-    # adjust logging
-    #
+    debug "adjusting logging ..."
 
     [ "${log_maxFileSize}" = "" ] && { echo "'log_maxFileSize' not defined" 1>&2; exit 1; }
 
@@ -195,9 +203,7 @@ function install-amq
         echo "updated logging in ${f}" || \
         { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
 
-    #
-    # update permissions
-    #
+    debug "updating permissions ..."
 
     chgrp ec2-user /opt/a-mq/ && echo "chgrp ec2-user /opt/a-mq/"
     chmod g+w /opt/a-mq/ && echo "chmod g+w /opt/a-mq/"
@@ -205,7 +211,6 @@ function install-amq
     chmod -R g+w /opt/a-mq/data && echo "chmod -R g+w /opt/a-mq/data"
     chgrp -R ec2-user /opt/a-mq/etc && echo "chgrp -R ec2-user /opt/a-mq/etc"
     chmod -R g+w /opt/a-mq/etc && echo "chmod -R g+w /opt/a-mq/etc"
-
 }
 
 # return the absolute path of the sole A-MQ directory, or empty string if no A-MQ directory
