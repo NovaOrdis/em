@@ -293,7 +293,7 @@ function configureTransportConnectors()
             n=$(cat ${f} | grep -n "transportConnector name=" | tail -1) || failed "failed to determine the line number"
             n=${n%%:*}
             cat ${f} | sed -e ${n}'a\
- \ \ \ \ \ \ \ \ \ \ \ \ <transportConnector name="'"${transport_name}"'" uri="tcp://'"${name}"':'"${network_bridge_port}"'"/>' > ${tmp_dir}/sed.tmp
+             <transportConnector name="'"${transport_name}"'" uri="tcp://'"${name}"':'"${network_bridge_port}"'"/>' > ${tmp_dir}/sed.tmp
             mv ${tmp_dir}/sed.tmp ${f} && info "added '${transport_name}' transportConnector in ${f}" || fail "failed to restore ${f} from ${tmp_dir}/sed.tmp"
         fi
 
@@ -338,13 +338,12 @@ function configureNetworkConnectors()
 
         # it only works with two brokers (TODO)
         cat ${f} | sed -e ${n}'a\
- \
- \ \ \ \ \ \ \ \ <networkConnectors>\
- \ \ \ \ \ \ \ \ \ \ \ \ <networkConnector name="unidirectional-bridge-to-'"${target}"'" uri="static:(tcp://'"${target}"':'"${bridge_port}"')"\
- \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ networkTTL="3" duplex="false" userName="'"${username}"'" password="'"${password}"'">\
- \ \ \ \ \ \ \ \ \ \ \ \ </networkConnector>\
- \ \ \ \ \ \ \ \ </networkConnectors>\
- \' > ${tmp_dir}/sed.tmp
+\
+        <networkConnectors>\
+            <networkConnector name="unidirectional-bridge-to-'"${target}"'" uri="static:(tcp://'"${target}"':'"${bridge_port}"')"\
+                              networkTTL="3" duplex="false" userName="'"${username}"'" password="'"${password}"'">\
+            </networkConnector>\
+        </networkConnectors>' > ${tmp_dir}/sed.tmp
         mv ${tmp_dir}/sed.tmp ${f} && info "added networkConnectors in ${f}" || fail "failed to restore ${f} from ${tmp_dir}/sed.tmp"
 
     fi
