@@ -10,7 +10,8 @@ public enum InstanceState
     STOPPED("stopped"),
     RUNNING("running"),
     PENDING("pending"),
-    SHUTTING_DOWN("shutting-down");
+    SHUTTING_DOWN("shutting-down"),
+    TERMINATED("terminated");
 
     private String literal;
 

@@ -48,6 +48,15 @@ public class InstanceStateTest
         assertEquals(InstanceState.SHUTTING_DOWN, s);
     }
 
+    @Test
+    public void terminated() throws Exception
+    {
+        String literal = "terminated";
+
+        InstanceState s = InstanceState.toInstanceState(literal);
+        assertEquals(InstanceState.TERMINATED, s);
+    }
+
     // Package protected -----------------------------------------------------------------------------------------------
 
     // Protected -------------------------------------------------------------------------------------------------------
