@@ -10,6 +10,11 @@
 #
 #
 
+########################################################################################################################
+#
+# CONFIGURATION
+#
+
 # ex: 1g or 515m
 
 java_min_mem=756m
@@ -26,6 +31,16 @@ temp_usage_limit="900 mb"
 
 log_maxFileSize=100MB
 burn_in_dir=/tmp/.burn-in
+
+general_purpose_connector_port=61616
+network_bridge_port=60000
+
+brokers="b01 b02"
+
+#
+#
+#
+########################################################################################################################
 
 function install-amq
 {
@@ -151,16 +166,8 @@ function install-amq
         echo "updated memoryUsage to ${memory_usage_limit} and tempUsage to ${temp_usage_limit} in ${f}" || \
         { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
 
-    debug "configuring transportConnector ..."
-
-    f=/opt/a-mq/etc/activemq.xml
-
-    cat ${f} | sed \
-        -e 's/^\(.*transportConnector.*uri=\"tcp:\/\/\).*\(\?maximumConnections.*$\)/\1'"${id}:61616"'\2/' > ${burn_in_dir}/sed.tmp || \
-            { echo "failed to sed ${f}" 1>2; exit 1; }
-    mv ${burn_in_dir}/sed.tmp ${f} && \
-        echo "updated transportConnector to ${id}:61616 in ${f}" || \
-        { echo "failed to restore ${f} from ${burn_in_dir}/sed.tmp" 1>2; exit 1; }
+    configureTransportConnectors /opt/a-mq/etc/activemq.xml ${burn_in_dir} ${id} ${general_purpose_connector_port} ${network_bridge_port} "${brokers}"
+    configureNetworkConnectors /opt/a-mq/etc/activemq.xml ${burn_in_dir} ${id} ${network_bridge_port} "${brokers}" admin admin123
 
     local clustered=false
     f=/opt/a-mq/etc/activemq.xml
@@ -197,7 +204,6 @@ function install-amq
         #
 
     fi
-
 
     debug "adjusting logging ..."
 
@@ -247,6 +253,101 @@ function get_amq_dir
     done
 
     echo ${amq_dir}
+}
+
+function configureTransportConnectors()
+{
+    debug "configuring transportConnectors ..."
+
+    local f=$1
+    local tmp_dir=$2
+    local name=$3
+    local general_purpose_port=$4
+    local network_bridge_port=$5
+    local brokers=$6 # space separated list of brokers
+
+    [ "${f}" = "" ] && fail "activemq.xml configuration file not specified"
+    [ -f ${f} ] || fail "configuration file ${f} does not exist"
+    [ "${tmp_dir}" = "" ] && fail "temporary directory not specified"
+    [ -d ${tmp_dir} ] || fail "temporary directory ${tmp_dir} not a directory"
+    [ "${name}" = "" ] && fail "'name' not specified"
+    [ "${general_purpose_port}" = "" ] && fail "'general_purpose_port' not specified"
+    [ "${network_bridge_port}" = "" ] && fail "'network_bridge_port' not specified"
+    [ "${brokers}" = "" ] && fail "'brokers' not specified"
+
+    debug "configuring the general purpose transport connector ..."
+
+    cat ${f} | sed -e 's/^\(.*transportConnector.*uri=\"tcp:\/\/\).*\(\?maximumConnections.*$\)/\1'"${name}":"${general_purpose_port}"'\2/' > ${tmp_dir}/sed.tmp || fail "failed to sed ${f}"
+    mv ${tmp_dir}/sed.tmp ${f} && info "updated the general purpose transportConnector to ${name}:${general_purpose_port} in ${f}" || fail "failed to restore ${f} from ${tmp_dir}/sed.tmp"
+
+    # create a connector for each peer broker
+    for b in ${brokers}; do
+        [ "${b}" = "${name}" ] && continue;
+        # we call them "<name>-inflow" so we first make sure the transport is not already there
+        local transport_name="${b}-inflow"
+        if grep -q "transportConnector name=\"${transport_name}\"" ${f}; then
+            debug "transport connector '${transport_name}' already exists"
+        else
+            debug "creating the '${transport_name}' transport connector for ${b}"
+            local n
+            n=$(cat ${f} | grep -n "transportConnector name=" | tail -1) || failed "failed to determine the line number"
+            n=${n%%:*}
+            cat ${f} | sed -e ${n}'a\
+ \ \ \ \ \ \ \ \ \ \ \ \ <transportConnector name="'"${transport_name}"'" uri="tcp://'"${name}"':'"${network_bridge_port}"'"/>' > ${tmp_dir}/sed.tmp
+            mv ${tmp_dir}/sed.tmp ${f} && info "added '${transport_name}' transportConnector in ${f}" || fail "failed to restore ${f} from ${tmp_dir}/sed.tmp"
+        fi
+
+    done
+}
+
+function configureNetworkConnectors()
+{
+    debug "configuring networkConnectors ..."
+
+    local f=$1
+    local tmp_dir=$2
+    local name=$3
+    local bridge_port=$4
+    local brokers=$5 # space separated list of brokers
+    local username=$6
+    local password=$7
+
+    [ "${f}" = "" ] && fail "activemq.xml configuration file not specified"
+    [ -f ${f} ] || fail "configuration file ${f} does not exist"
+    [ "${tmp_dir}" = "" ] && fail "temporary directory not specified"
+    [ -d ${tmp_dir} ] || fail "temporary directory ${tmp_dir} not a directory"
+    [ "${name}" = "" ] && fail "'name' not specified"
+    [ "${brokers}" = "" ] && fail "'brokers' not specified"
+    [ "${bridge_port}" = "" ] && fail "'bridge_port' not specified"
+    [ "${username}" = "" ] && fail "'username' not specified"
+    [ "${password}" = "" ] && fail "'password' not specified"
+
+    if grep -q "<networkConnectors" ${f}; then
+        debug "network connectors already configured"
+    else
+        local n
+        n=$(cat ${f} | grep -n "</transportConnectors>" | tail -1) || failed "failed to determine the line number"
+        n=${n%%:*}
+
+        local target;
+
+        for b in ${brokers}; do
+            [ "${b}" = "${name}" ] && continue;
+            target=${b}
+        done
+
+        # it only works with two brokers (TODO)
+        cat ${f} | sed -e ${n}'a\
+ \
+ \ \ \ \ \ \ \ \ <networkConnectors>\
+ \ \ \ \ \ \ \ \ \ \ \ \ <networkConnector name="unidirectional-bridge-to-'"${target}"'" uri="static:(tcp://'"${target}"':'"${bridge_port}"')"\
+ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ networkTTL="3" duplex="false" userName="'"${username}"'" password="'"${password}"'">\
+ \ \ \ \ \ \ \ \ \ \ \ \ </networkConnector>\
+ \ \ \ \ \ \ \ \ </networkConnectors>\
+ \' > ${tmp_dir}/sed.tmp
+        mv ${tmp_dir}/sed.tmp ${f} && info "added networkConnectors in ${f}" || fail "failed to restore ${f} from ${tmp_dir}/sed.tmp"
+
+    fi
 }
 
 

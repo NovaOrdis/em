@@ -10,6 +10,7 @@
 #
 #
 
+# TODO consolidate with ec2.shlib similar function
 # By default, without doing anything, debug is turned off.
 # To turn debugging on, set debug_off=false somewhere in the upper calling layers.
 function debug
@@ -17,6 +18,21 @@ function debug
     ${debug_off} && return 0
     echo "$1" 1>&2;
 }
+
+# TODO consolidate with ec2.shlib similar function
+function info()
+{
+    echo "$@" 1>&2;
+}
+
+# TODO consolidate with ec2.shlib similar function
+# sends the arguments at stderr and exits with 1
+function fail()
+{
+    echo "$@" 1>&2;
+    exit 1
+}
+
 
 function get-ids
 {
