@@ -10,6 +10,7 @@ function main()
         if [ "$1" = "--debug" ]; then
             debug=true
             debug_arg="--debug"
+            debug_jvm="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5006"
         elif [ "${short_class_name}" = "" ]; then
             short_class_name=$1
         else
@@ -23,7 +24,7 @@ $(dirname $0)/../../../../../target/em-1.0-SNAPSHOT.jar:\
 $(dirname $0):\
 ${M2}/log4j/log4j/1.2.17/log4j-1.2.17.jar"
 
-    command="java -cp ${classpath} com.novaordis.em.parser.${short_class_name} ${arguments}"
+    command="java -cp ${classpath} ${debug_jvm} com.novaordis.em.parser.${short_class_name} ${debug_arg} ${arguments}"
 
     ${debug} && echo "${command}" 1>&2;
     ${command}

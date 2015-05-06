@@ -69,6 +69,10 @@ function install-amq
 
     (cd /opt; ln -s ${amq_dir} a-mq) && echo "linked ${amq_dir} to /opt/a-mq"
 
+    if [ ! -d ${amq_dir}/data/log ]; then
+        mkdir ${amq_dir}/data/log || fail "failed to create ${amq_dir}/data/log"
+    fi
+
     # update root's and ec2-user's .bashrc
 
     local users="ec2-user root"

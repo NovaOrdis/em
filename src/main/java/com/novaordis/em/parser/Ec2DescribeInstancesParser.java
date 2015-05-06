@@ -1,6 +1,7 @@
 package com.novaordis.em.parser;
 
 import com.novaordis.em.UserErrorException;
+import com.novaordis.em.Util;
 import com.novaordis.em.model.Filter;
 import com.novaordis.em.model.Instance;
 import com.novaordis.em.model.InstanceField;
@@ -154,7 +155,11 @@ public class Ec2DescribeInstancesParser
     {
         for(int i = 0; i < args.length; i ++)
         {
-            if ("--list".equalsIgnoreCase(args[i]) || "--table".equalsIgnoreCase(args[i]))
+            if ("--debug".equals(args[i]))
+            {
+                Util.enableDebugDynamically();
+            }
+            else if ("--list".equalsIgnoreCase(args[i]) || "--table".equalsIgnoreCase(args[i]))
             {
                 if (i == args.length - 1)
                 {

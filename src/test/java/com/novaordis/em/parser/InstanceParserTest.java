@@ -189,6 +189,23 @@ public class InstanceParserTest
         assertEquals(InetAddress.getByName("52.24.116.231"), i.getPublicIp());
     }
 
+    // parsePrivateNicAddress() ----------------------------------------------------------------------------------------
+
+
+    @Test
+    public void parserrivateIpAddress() throws Exception
+    {
+        String input = "PRIVATEIPADDRESS\t172.31.25.44\tip-172-31-25-44.us-west-2.compute.internal\tec2-52-24-168-63.us-west-2.compute.amazonaws.com";
+
+        InstanceParser p = new InstanceParser();
+
+        p.parsePrivateIpAddress(input);
+
+        Instance i = p.getInstance();
+
+        assertEquals(InetAddress.getByName("172.31.25.44"), i.getPrivateIp());
+    }
+
     // Package protected -----------------------------------------------------------------------------------------------
 
     // Protected -------------------------------------------------------------------------------------------------------

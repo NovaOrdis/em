@@ -194,6 +194,24 @@ public class InstanceParser
     /**
      * Package protected for testing.
      */
+    void parsePrivateIpAddress(String tabSeparatedLine)
+    {
+        String[] tokens = tabSeparatedLine.split("\t");
+
+        String header = tokens[0];
+
+            if (!PRIVATEIPADDRESS.equals(header))
+        {
+            throw new IllegalArgumentException("not a valid " + PRIVATEIPADDRESS + " line");
+        }
+
+        String privateIpAddress = tokens[1];
+        instance.setPrivateIp(privateIpAddress);
+    }
+
+    /**
+     * Package protected for testing.
+     */
     void parseInstance(String tabSeparatedLine)
     {
         if (tabSeparatedLine == null)
@@ -244,10 +262,16 @@ public class InstanceParser
             parseNicAssociation(line);
         }
 
+        line = lines.get(PRIVATEIPADDRESS);
+
+        if (line != null)
+        {
+            parsePrivateIpAddress(line);
+        }
+
         line = lines.get(INSTANCE);
 
         parseInstance(line);
-
     }
 
     // Inner classes ---------------------------------------------------------------------------------------------------
