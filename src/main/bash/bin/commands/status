@@ -22,7 +22,7 @@ function main()
 
     ${help} && usage;
 
-    ec2-describe-instances | jw Ec2DescribeInstancesParser --table name:state:id:public-ip:private-ip
+    ec2-describe-instances | jw ec2.ec2_describe_instances_parser --table name:state:id:public-ip:private-ip
 
 }
 

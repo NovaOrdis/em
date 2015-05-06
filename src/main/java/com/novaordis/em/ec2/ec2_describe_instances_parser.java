@@ -1,12 +1,13 @@
-package com.novaordis.em.parser;
+package com.novaordis.em.ec2;
 
 import com.novaordis.em.UserErrorException;
 import com.novaordis.em.Util;
-import com.novaordis.em.model.Filter;
-import com.novaordis.em.model.Instance;
-import com.novaordis.em.model.InstanceField;
-import com.novaordis.em.output.Output;
-import com.novaordis.em.output.OutputFormat;
+import com.novaordis.em.ec2.model.Filter;
+import com.novaordis.em.ec2.model.InstanceField;
+import com.novaordis.em.ec2.output.OutputFormat;
+import com.novaordis.em.ec2.model.Instance;
+import com.novaordis.em.ec2.output.Output;
+import com.novaordis.em.ec2.parser.InstanceParser;
 import org.apache.log4j.Logger;
 
 import java.io.BufferedReader;
@@ -25,11 +26,11 @@ import java.util.StringTokenizer;
  *
  * Copyright 2015 Nova Ordis LLC
  */
-public class Ec2DescribeInstancesParser
+public class ec2_describe_instances_parser
 {
     // Constants -------------------------------------------------------------------------------------------------------
 
-    private static final Logger log = Logger.getLogger(Ec2DescribeInstancesParser.class);
+    private static final Logger log = Logger.getLogger(ec2_describe_instances_parser.class);
 
     // Static ----------------------------------------------------------------------------------------------------------
 
@@ -40,7 +41,7 @@ public class Ec2DescribeInstancesParser
         //noinspection TryFinallyCanBeTryWithResources
         try
         {
-            Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(args);
+            ec2_describe_instances_parser p = new ec2_describe_instances_parser(args);
             p.parse(br);
             p.output();
         }
@@ -59,7 +60,7 @@ public class Ec2DescribeInstancesParser
 
     // Constructors ----------------------------------------------------------------------------------------------------
 
-    public Ec2DescribeInstancesParser(String[] args) throws Exception
+    public ec2_describe_instances_parser(String[] args) throws Exception
     {
         outputFields = new ArrayList<>();
         filters = new ArrayList<>();

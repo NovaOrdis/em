@@ -1,6 +1,7 @@
-package com.novaordis.em.parser;
+package com.novaordis.em.ec2.parser;
 
-import com.novaordis.em.model.Instance;
+import com.novaordis.em.ec2.model.Instance;
+import com.novaordis.em.ec2.parser.InstanceParser;
 import org.junit.Test;
 
 import java.io.BufferedReader;

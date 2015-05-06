@@ -1,10 +1,10 @@
-package com.novaordis.em.parser;
+package com.novaordis.em.ec2;
 
 import com.novaordis.em.UserErrorException;
-import com.novaordis.em.model.Filter;
-import com.novaordis.em.model.Instance;
-import com.novaordis.em.model.InstanceField;
-import com.novaordis.em.model.InstanceState;
+import com.novaordis.em.ec2.model.Filter;
+import com.novaordis.em.ec2.model.Instance;
+import com.novaordis.em.ec2.model.InstanceField;
+import com.novaordis.em.ec2.model.InstanceState;
 import org.apache.log4j.Logger;
 import org.junit.Test;
 
@@ -22,11 +22,11 @@ import static org.junit.Assert.fail;
  *
  * Copyright 2015 Nova Ordis LLC
  */
-public class Ec2DescribeInstancesParserTest
+public class ec2_describe_instances_parserTest
 {
     // Constants -------------------------------------------------------------------------------------------------------
 
-    private static final Logger log = Logger.getLogger(Ec2DescribeInstancesParserTest.class);
+    private static final Logger log = Logger.getLogger(ec2_describe_instances_parserTest.class);
 
     // Static ----------------------------------------------------------------------------------------------------------
 
@@ -43,7 +43,7 @@ public class Ec2DescribeInstancesParserTest
     {
         try
         {
-            new Ec2DescribeInstancesParser(new String[]{"--no-such-argument"});
+            new ec2_describe_instances_parser(new String[]{"--no-such-argument"});
             fail("unknown argument, should fail with UserErrorException");
         }
         catch(UserErrorException e)
@@ -59,7 +59,7 @@ public class Ec2DescribeInstancesParserTest
     {
         try
         {
-            new Ec2DescribeInstancesParser(new String[]{"--list"});
+            new ec2_describe_instances_parser(new String[]{"--list"});
             fail("nothing follows --list, should fail with UserErrorException");
         }
         catch(UserErrorException e)
@@ -71,7 +71,7 @@ public class Ec2DescribeInstancesParserTest
     @Test
     public void commandLine_CorrectList() throws Exception
     {
-        Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(new String[]{"--list", "name:public-ip"});
+        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[]{"--list", "name:public-ip"});
 
         List<InstanceField> fields = p.getOutputFields();
 
@@ -88,7 +88,7 @@ public class Ec2DescribeInstancesParserTest
     {
         try
         {
-            new Ec2DescribeInstancesParser(new String[]{"--filters"});
+            new ec2_describe_instances_parser(new String[]{"--filters"});
             fail("nothing follows --filter, should fail with UserErrorException");
         }
         catch(UserErrorException e)
@@ -100,7 +100,7 @@ public class Ec2DescribeInstancesParserTest
     @Test
     public void commandLine_FilterOutput() throws Exception
     {
-        Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(new String[]{"--filter", "state=running"});
+        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[]{"--filter", "state=running"});
 
         List<Filter> filters = p.getFilters();
 
@@ -111,7 +111,7 @@ public class Ec2DescribeInstancesParserTest
     @Test
     public void commandLine_FiltersOutput() throws Exception
     {
-        Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(new String[]{"--filters", "state=running"});
+        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[]{"--filters", "state=running"});
 
         List<Filter> filters = p.getFilters();
 
@@ -124,7 +124,7 @@ public class Ec2DescribeInstancesParserTest
     @Test
     public void noCommandOutputParsed() throws Exception
     {
-        Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(new String[0]);
+        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[0]);
 
         try
         {
@@ -143,7 +143,7 @@ public class Ec2DescribeInstancesParserTest
         String input = "bogus line\n";
 
         BufferedReader br = new BufferedReader(new StringReader(input));
-        Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(new String[0]);
+        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[0]);
 
         try
         {
@@ -181,7 +181,7 @@ public class Ec2DescribeInstancesParserTest
 
         BufferedReader br = new BufferedReader(new StringReader(input));
 
-        Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(new String[0]);
+        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[0]);
         p.parse(br);
 
         br.close();
@@ -227,7 +227,7 @@ public class Ec2DescribeInstancesParserTest
 
         BufferedReader br = new BufferedReader(new StringReader(input));
 
-        Ec2DescribeInstancesParser p = new Ec2DescribeInstancesParser(
+        ec2_describe_instances_parser p = new ec2_describe_instances_parser(
             new String[] {"--filters", "state=running", "--list", "name:state:public-ip"});
 
         p.parse(br);

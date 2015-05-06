@@ -1,4 +1,4 @@
-package com.novaordis.em.output;
+package com.novaordis.em.ec2.output;
 
 /**
  * @author <a href="mailto:ovidiu@novaordis.com">Ovidiu Feodorov</a>

@@ -1,8 +1,8 @@
-package com.novaordis.em.output;
+package com.novaordis.em.ec2.output;
 
-import com.novaordis.em.model.Instance;
-import com.novaordis.em.model.InstanceField;
-import com.novaordis.em.model.InstanceState;
+import com.novaordis.em.ec2.model.Instance;
+import com.novaordis.em.ec2.model.InstanceField;
+import com.novaordis.em.ec2.model.InstanceState;
 import org.apache.log4j.Logger;
 import org.junit.Test;
 

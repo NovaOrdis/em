@@ -1,5 +1,6 @@
-package com.novaordis.em.model;
+package com.novaordis.em.ec2.model;
 
+import com.novaordis.em.ec2.model.InstanceState;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
