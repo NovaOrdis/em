@@ -1,0 +1,66 @@
+#!/bin/bash
+
+#
+# Global variables
+#
+
+export debug=false
+
+#
+# Activated by --verbose|-v. Relies on a "debug" global variable
+#
+function debug
+{
+    ${debug} && echo "$@" 1>&2;
+}
+
+#
+# Send info at stderr (not to interfere with function returns)
+#
+function info
+{
+    echo "$@" 1>&2;
+}
+
+#
+# Send error information at stderr (but not exit)
+#
+function error
+{
+    echo "$@" 1>&2;
+}
+
+#
+# Send error information at stderr and exit
+#
+function fail
+{
+    echo "$@" 1>&2 && exit 1
+}
+
+#
+# Process common options setting global variables. There is no way (or I don't know of any way) to modify the caller's
+# positional parameters as to remove the parameters processed by this function, but it sets an "args" global variable
+# that contains the remaining parameters, so you can use that.
+#
+# Usage:
+#           process-common-options $@
+#
+#           for i in ${args}; do
+#               # process remaining parameters
+#           done
+#
+function process-common-arguments
+{
+    args=""
+
+    while [ "$1" != "" ]; do
+        if [ "$1" = "--verbose" -o "$1" = "-v" ]; then
+            debug=true
+        else
+            [ "${args}" = "" ] && args=$1 || args="${args} $1"
+        fi
+        shift
+    done
+}
+
