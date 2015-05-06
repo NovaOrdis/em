@@ -193,12 +193,12 @@ public class Ec2DescribeInstancesParserTest
         Instance instance = instances.get(0);
 
         assertEquals("i-db0ab82d", instance.getId());
-        assertEquals(InstanceState.stopped, instance.getState());
+        assertEquals(InstanceState.STOPPED, instance.getState());
 
         Instance instance2 = instances.get(1);
 
         assertEquals("i-0ea9c7f8", instance2.getId());
-        assertEquals(InstanceState.running, instance2.getState());
+        assertEquals(InstanceState.RUNNING, instance2.getState());
     }
 
 

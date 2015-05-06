@@ -57,30 +57,15 @@ public enum InstanceField
             throw new IllegalArgumentException("null command line literal");
         }
 
-        if (ID.getCommandLineLiteral().equalsIgnoreCase(commandLineLiteral))
+        for(InstanceField f : InstanceField.values())
         {
-            return ID;
+            if (f.getCommandLineLiteral().equalsIgnoreCase(commandLineLiteral))
+            {
+                return f;
+            }
         }
-        else if (NAME.getCommandLineLiteral().equalsIgnoreCase(commandLineLiteral))
-        {
-            return NAME;
-        }
-        else if (PUBLIC_IP.getCommandLineLiteral().equalsIgnoreCase(commandLineLiteral))
-        {
-            return PUBLIC_IP;
-        }
-        else if (PRIVATE_IP.getCommandLineLiteral().equalsIgnoreCase(commandLineLiteral))
-        {
-            return PRIVATE_IP;
-        }
-        else if (STATE.getCommandLineLiteral().equalsIgnoreCase(commandLineLiteral))
-        {
-            return STATE;
-        }
-        else
-        {
-            throw new IllegalArgumentException("no InstanceOutputField enum value for '" + commandLineLiteral + "'");
-        }
+
+        throw new IllegalArgumentException("no InstanceField enum value for '" + commandLineLiteral + "'");
     }
 
     /**
@@ -145,7 +130,7 @@ public enum InstanceField
                 return null;
             }
 
-            return state.toString();
+            return state.getLiteral();
         }
         else
         {
@@ -172,7 +157,7 @@ public enum InstanceField
         }
         else if (STATE.equals(this))
         {
-            return InstanceState.valueOf(s);
+            return InstanceState.toInstanceState(s);
         }
         else
         {

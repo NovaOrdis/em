@@ -104,7 +104,7 @@ public class Instance
      */
     public void setState(String s)
     {
-        this.state = InstanceState.valueOf(s);
+        this.state = InstanceState.toInstanceState(s);
     }
 
     public InstanceState getState()

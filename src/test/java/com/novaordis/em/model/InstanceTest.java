@@ -3,8 +3,6 @@ package com.novaordis.em.model;
 import org.apache.log4j.Logger;
 import org.junit.Test;
 
-import java.net.Inet4Address;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
@@ -86,10 +84,10 @@ public class InstanceTest
         assertNull(i.getState());
         assertNull(i.get(InstanceField.STATE));
 
-        i.setState(InstanceState.running);
+        i.setState(InstanceState.RUNNING);
 
-        assertEquals(InstanceState.running, i.getState());
-        assertEquals(InstanceState.running, i.get(InstanceField.STATE));
+        assertEquals(InstanceState.RUNNING, i.getState());
+        assertEquals(InstanceState.RUNNING, i.get(InstanceField.STATE));
     }
 
     @Test

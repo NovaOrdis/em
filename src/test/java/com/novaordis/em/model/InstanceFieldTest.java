@@ -111,7 +111,7 @@ public class InstanceFieldTest
         InstanceField field = InstanceField.toInstanceField("state");
         assertEquals(InstanceField.STATE, field);
         Instance i = new Instance("i-0ea9c7f8");
-        i.setState(InstanceState.running);
+        i.setState(InstanceState.RUNNING);
         String s = field.fromInstance(i);
         assertEquals("running", s);
     }

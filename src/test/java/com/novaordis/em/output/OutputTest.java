@@ -116,11 +116,11 @@ public class OutputTest
 
         Instance instance = new Instance("i-db0ab82d");
         instance.setName("A");
-        instance.setState(InstanceState.stopped);
+        instance.setState(InstanceState.STOPPED);
 
         Instance instance2 = new Instance("i-0ea9c7f8");
         instance2.setName("Instance with a very long name");
-        instance2.setState(InstanceState.running);
+        instance2.setState(InstanceState.RUNNING);
 
         List<Instance> instances = Arrays.asList(instance, instance2);
 
