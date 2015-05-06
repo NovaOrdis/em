@@ -2,16 +2,46 @@
 
 [ -f $(dirname $0)/../lib/em.shlib ] && . $(dirname $0)/../lib/em.shlib || { echo "$(dirname $0)/../lib/em.shlib not found" 1>&2; exit 1; }
 
+export version=1.0
+export release_date="05/06/15"
+
+args=""
+
+function usage()
+{
+cat <<EOF
+
+Environment Manager
+
+Version       ${version}
+Release Date: ${release_date}
+
+EOF
+
+exit 0
+}
+
 function main()
 {
     process-common-arguments $@
 
-    for arg in ${args}; do
-        echo "> ${arg}"
+    [ "${args}" = "" ] && usage;
+
+    #
+    # the first "non-common" argument is the command
+    #
+
+    local command_file
+    local command_args
+    for i in ${args}; do
+        [ "${command_file}" = "" ] && command_file=${i} || command_args="${command_args} ${i}"
     done
 
-    echo "debug: ${debug}"
+    local command="$(dirname $0)/commands/${command_file} $(serialize-common-arguments) ${command_args}"
 
+    debug ${command}
+
+    ${command}
 }
 
 main $@

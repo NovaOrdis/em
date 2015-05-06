@@ -1,0 +1,24 @@
+#!/bin/bash
+
+#
+# make the login links if necessary
+#
+function make_login_links()
+{
+    local name_colon_public_ip_space_separated_list=$1 # example "f01:1.1.1.1 f02:2.2.2.2"
+
+    for i in ${name_colon_public_ip_space_separated_list}; do
+        local name=${i%:*}
+
+        if [ ! -h ~/bin/ec2/${name} ]; then
+            local ec2_ssh
+            ec2_ssh=$(dirname $0)/ec2-ssh
+            # make sure it's an absolute path
+            [ ${ec2_ssh:0:1} = "/" ] || fail "${ec2_ssh} is not an absolute path, TODO: improve the script to determine the absolute path"
+            [ -x ${ec2_ssh} ] || fail "${ec2_ssh} does not exist or is not executable"
+            debug "linking ${ec2_ssh} as ~/bin/ec2/${name}"
+            (cd ~/bin/ec2/; ln -s ${ec2_ssh} ${name}) && info "${name} link created"
+        fi
+    done
+}
+

@@ -4,15 +4,38 @@
 # Global variables
 #
 
+export verbose=false
 export debug=false
+export dry_run=false
+export help=false
 
 #
-# Activated by --verbose|-v. Relies on a "debug" global variable
+# Activated by --verbose|-v. Relies on a "verbose" global variable
 #
 function debug
 {
-    ${debug} && echo "$@" 1>&2;
+    ${verbose} && echo "$@" 1>&2;
 }
+
+function debug-arguments
+{
+    ${verbose} && echo "${FUNCNAME[1]}($@)" 1>&2;
+}
+
+#function debug_args()
+#{
+#    if [ "${debug}" = "" ] || ! ${debug}; then return; fi
+#
+#    effective_user=`get_user_name` || exit 1
+#
+#    echo -n "$0 ${effective_user}@${FUNCNAME[1]}(" 1>&2;
+#    while [ $# -gt 0 ]; do
+#        [ "$1" = "" ] && echo -n "\"\"" 1>&2 || echo -n $1 1>&2
+#        shift
+#        [ $# -gt 0 ] && echo -n ", " 1>&2
+#    done
+#    echo ")" 1>&2;
+#}
 
 #
 # Send info at stderr (not to interfere with function returns)
@@ -39,24 +62,48 @@ function fail
 }
 
 #
-# Process common options setting global variables. There is no way (or I don't know of any way) to modify the caller's
-# positional parameters as to remove the parameters processed by this function, but it sets an "args" global variable
-# that contains the remaining parameters, so you can use that.
+# Process common options setting and exporting global variables (so these values are passed to sub-shells). There is no
+# way (or I don't know of any way) to modify the caller's positional parameters as to remove the parameters processed
+# by this function, but it sets an "args" global variable that contains the remaining parameters, so you can use that.
+#
+# Note that if you need to convert exported global variables back into common command line arguments (to pass them
+# over ssh, for example), use 'serialize-common-arguments' function.
 #
 # Usage:
 #           process-common-options $@
 #
 #           for i in ${args}; do
-#               # process remaining parameters
+#               # process remaining parameters as ${i}
 #           done
+#
+# Option Handled       Global Variable Set      Notes
+#
+# --verbose            export verbose=true
+#
+# -v                   export verbose=true
+#
+# --debug              export verbose=true      This should be used when we want to debug the process with a debugger
+#                      export debug=true
+#
+# --dry-run            export dry_run=true
+#
+# --help               export help=true
 #
 function process-common-arguments
 {
     args=""
 
-    while [ "$1" != "" ]; do
+    while [ $# -gt 0 ]; do
         if [ "$1" = "--verbose" -o "$1" = "-v" ]; then
-            debug=true
+            export verbose=true
+        elif [ "$1" = "--debug" ]; then
+            export verbose=true
+            # we need to set this to pass it to sub-processes as argument
+            export debug=true
+        elif [ "$1" = "--dry-run" ]; then
+            export dry_run=true
+        elif [ "$1" = "--help" ]; then
+            export help=true
         else
             [ "${args}" = "" ] && args=$1 || args="${args} $1"
         fi
@@ -64,3 +111,58 @@ function process-common-arguments
     done
 }
 
+function serialize-common-arguments
+{
+    ${verbose} && echo "--verbose"
+    ${debug} && echo "--debug"
+    ${dry_run} && echo "--dry-run"
+    ${help} && echo "--help"
+}
+
+#
+# the Java Wrapper
+#
+# Usage:
+#
+#       java [com.novaordis.em.]package1.package2.ClassName [main() method arguments]
+#
+#
+function jw()
+{
+    debug-arguments $@
+
+    local short_class_name
+    local main_method_arguments
+
+    while [ "$1" != "" ]; do
+        if [ "${short_class_name}" = "" ]; then
+            short_class_name=$1
+        else
+            [ "${main_method_arguments}" = "" ] && \
+                main_method_arguments="$1" || \
+                main_method_arguments="${main_method_arguments} $1"
+        fi
+        shift
+    done
+
+    #
+    # location - in most cases, jw is run by a command, so the relative path to the etc directory is ../../etc
+    #
+
+    local etc_dir=$(dirname $0)/../../etc
+
+    [ -d ${etc_dir} ] || fail "the em etc directory ${etc_dir} does not seem to be accessible"
+
+    local classpath="\
+$(dirname $0)/../../../../../target/em-1.0-SNAPSHOT.jar:\
+${etc_dir}:\
+${M2}/log4j/log4j/1.2.17/log4j-1.2.17.jar"
+
+    ${debug} && jvm_debug_args="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5006"
+    fully_qualified_class_name="com.novaordis.em.parser.${short_class_name}"
+    command="java -cp ${classpath} ${jvm_debug_args} ${fully_qualified_class_name} ${main_method_arguments}"
+
+    debug "${command}"
+
+    ${command}
+}

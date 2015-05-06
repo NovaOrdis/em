@@ -1,0 +1,46 @@
+#!/bin/bash
+
+[ -f $(dirname $0)/../../lib/em.shlib ] && . $(dirname $0)/../../lib/em.shlib || { echo "$(dirname $0)/../../lib/em.shlib not found" 1>&2; exit 1; }
+[ -f $(dirname $0)/../../lib/linux.shlib ] && . $(dirname $0)/../../lib/linux.shlib || { echo "$(dirname $0)/../../lib/linux.shlib not found" 1>&2; exit 1; }
+
+# also load the individual command lib file if available
+[ -f $(dirname $0)/lib/$(basename $0).shlib ] && . $(dirname $0)/lib/$(basename $0).shlib
+
+function usage()
+{
+cat <<EOF
+
+Query the current Amazon EC2 region \$EC2_URL (${EC2_URL}), pull the current public IP addresses
+associated with running instances, updates /etc/hosts with the latest public IP values and creates the required
+login symbolic links if necessary.
+
+EOF
+exit 0
+}
+
+function main()
+{
+    process-common-arguments $@
+
+    debug "$(basename $0) command line arguments: $@"
+
+    ${help} && usage;
+
+    local running_instances_name_and_public_ip
+
+    running_instances_name_and_public_ip=$(ec2-describe-instances | jw Ec2DescribeInstancesParser --filter state=running --list name:public-ip) || exit 1
+
+    debug "running_instances_name_and_public_ip: ${running_instances_name_and_public_ip}"
+
+    [ "${running_instances_name_and_public_ip}" = "" ] && { info "no running hosts"; exit 0; }
+
+    for i in ${running_instances_name_and_public_ip}; do
+        local name=${i%%:*}
+        local ip=${i##*:}
+        info "${name} ${ip}"
+        #update-etc-hosts ${name} ${ip}
+        #make_login_links "${name_and_public_ip_for_running_instances}"
+    done
+}
+
+main $@
