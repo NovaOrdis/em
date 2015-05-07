@@ -3,6 +3,10 @@
 lib=$(dirname $0)/../../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 
+help=false
+mode="start"
+args=""
+
 function usage()
 {
 cat <<EOF
@@ -35,20 +39,22 @@ function main()
 
     ${help} && usage;
 
-    local name
+    [ "${args}" = "" ] && fail "instance name(s) not specified"
+
+    local names=""
     for i in ${args}; do
-        [ "${name}" = "" ] && name=${i} || fail "currently we only support ${mode}ing one instance at a time"
+        [ "${names}" = "" ] && names="${i}" || names="${names}|${i}"
     done
 
-    [ "${name}" = "" ] && fail "instance name(s) not specified"
+    debug "names: ${names}"
 
-    local id=$(ec2-describe-instances | jw ec2.ec2_describe_instances_parser --filter name=${name} --list id) || { exit 1; }
+    local ids=$(ec2-describe-instances | jw ec2.ec2_describe_instances_parser --filter name="${names}" --list id) || { exit 1; }
 
-    [ "${id}" = "" ] && exit 1
+    [ "${ids}" = "" ] && exit 1
 
-    info "${mode}ing ${id} ..."
+    info "${mode}ing ${ids} ..."
 
-    local command="ec2-${mode}-instances ${id}"
+    local command="ec2-${mode}-instances ${ids}"
 
     ${command} || fail "failed to ${mode}"
 
