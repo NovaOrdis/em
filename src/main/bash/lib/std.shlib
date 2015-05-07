@@ -170,7 +170,7 @@ function jw()
     local classpath="\
 $(dirname $0)/../../../../../target/em-1.0-SNAPSHOT.jar:\
 ${etc_dir}:\
-${M2}/log4j/log4j/1.2.17/log4j-1.2.17.jar"
+${M2}/log4j/log4j/1.2.16/log4j-1.2.16.jar"
 
     ${debug} && jvm_debug_args="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5006"
 
