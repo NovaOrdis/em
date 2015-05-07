@@ -1,6 +1,6 @@
 #!/bin/bash
 
-[ -f $(dirname $0)/../lib/em.shlib ] && . $(dirname $0)/../lib/em.shlib || { echo "$(dirname $0)/../lib/em.shlib not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 
 export version=1.0
 export release_date="05/06/15"
@@ -21,11 +21,19 @@ EOF
 exit 0
 }
 
+function read-configuration()
+{
+    local conf_file=$(dirname $0)/../etc/em.conf
+    [ -f ${conf_file} ] && . ${conf_file}
+}
+
 function main()
 {
     process-common-arguments $@
 
     [ "${args}" = "" ] && usage;
+
+    read-configuration
 
     #
     # the first "non-common" argument is the command

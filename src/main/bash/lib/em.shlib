@@ -50,7 +50,7 @@ function info
 #
 function error
 {
-    echo "$@" 1>&2;
+    echo "[error]: $@" 1>&2;
 }
 
 #
@@ -58,7 +58,7 @@ function error
 #
 function fail
 {
-    echo "$@" 1>&2 && exit 1
+    error "$@" && exit 1
 }
 
 #
@@ -120,6 +120,20 @@ function serialize-common-arguments
 }
 
 #
+# returns the value associate with the variable name or fail if the variable is not found
+#
+function config
+{
+    variable_name=$1
+    [ "${variable_name}" = "" ] && fail "no variable name specified"
+
+    local value="${!variable_name}"
+    [ "${value}" = "" ] && fail "configuration variable '${variable_name}' has no value associated with it. Check your em configuration file"
+
+    echo "${value}"
+}
+
+#
 # the Java Wrapper
 #
 # Usage:
@@ -167,4 +181,35 @@ ${M2}/log4j/log4j/1.2.17/log4j-1.2.17.jar"
     debug "${command}"
 
     ${command}
+}
+
+#
+# Returns the name of an unique file (that can be used as a temporary file). The file name path is absolute
+# and can be used as returned. The function does not create the file, nor deletes it.
+#
+function unique-file()
+{
+    echo "/tmp/em-"`date +'%y%m%d%H%M%S'`"${RANDOM}"
+}
+
+#
+# move <source-file> <destination-file>
+#
+# Overwrite the destination-file with the source-file *only if the files differ*. The default behavior is to
+# remove the source file upon success.
+#
+# If the files are identical, fail
+function move()
+{
+    local src=$1
+    local dest=$2
+
+    [ "${src}" = "" ] && fail "no source file specified"
+    [ -f ${src} ] || fail "no such file ${src}"
+    [ "${dest}" = "" ] && fail "no destination file specified"
+    [ -f ${dest} ] || fail "no such file ${dest}"
+
+
+    diff ${src} ${dest} > /dev/null && fail "files ${src} and ${dest} are identical, no replacement was made"
+    mv ${src} ${dest} || fail "failed to move ${src} over ${dest}"
 }

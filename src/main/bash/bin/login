@@ -1,0 +1,26 @@
+#!/bin/bash
+
+#
+# The em login shortcut script. em will link to it using environment host names.
+#
+
+function main()
+{
+    [ ! -h $0 ] && { echo "$0 supposed to be used via a symbolic link, not directly" 1>&2; exit 1; }
+
+    # we're a link
+
+    local link_target
+    link_target=$(readlink $0) || exit 1
+    link_target_dir=$(dirname ${link_target})
+    lib=${link_target_dir}/../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+    lib=${link_target_dir}/../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+
+    local name=$(basename $0)
+    local ip
+    ip=$(resolve-ip ${name}) || exit 1
+    [ "${ip}" = "" ] && fail "no IP address associated with ${name} in /etc/hosts"
+    ssh ec2-user@${ip}
+}
+
+main

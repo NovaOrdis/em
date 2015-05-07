@@ -7,4 +7,4 @@ lib_dir=$(dirname $0)/../../main/bash/lib/
 
 verbose=true
 
-update-etc-hosts $@
+

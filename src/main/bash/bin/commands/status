@@ -1,6 +1,7 @@
 #!/bin/bash
 
-[ -f $(dirname $0)/../../lib/em.shlib ] && . $(dirname $0)/../../lib/em.shlib || { echo "$(dirname $0)/../../lib/em.shlib not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 
 function usage()
 {

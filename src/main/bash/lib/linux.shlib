@@ -1,37 +1,74 @@
 #!/bin/bash
 
+#
 # Functions required to interact (read values, configure) with a Linux system.
 #
 # All generic functions and settings from em.shlib will be available here because this file will be sources
 # *after* em.shlib
+#
+
+########################################################################################################################
+# /etc/hosts functions
+########################################################################################################################
+
 
 # Given a host name and an IP address, update the system's /etc/hosts if the IP associated with the
 # host name in the file is different or the host is not mentioned.
 #
+# return 0 if an update has been made or 1 if no update has been made because the values are already in the file
+#
 function update-etc-hosts()
 {
-    local name=$1
-    local ip=$2
-
     debug-arguments $@
 
-    [ -w /etc/hosts ] || fail "current user cannot write /etc/hosts"
+    local name=$1
+    local ip=$2
+    local etc_hosts=$3 # optional, for testing
 
-    local line
-    line=$(cat /etc/hosts | grep "^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*[ \t]*${name}[ \t]*")
+    [ "${name}" = "" ] && fail "${FUNCNAME[0]}: 'name' not specified"
+    [ "${ip}" = "" ] && fail "${FUNCNAME[0]}: 'ip' not specified"
+    echo ${ip} | grep -q "^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*$" || fail "${FUNCNAME[0]}: ${ip} not an IP address"
+    [ "${etc_hosts}" = "" ] && etc_hosts=/etc/hosts
 
-    debug ${line}
+    [ -w ${etc_hosts} ] || fail "current user cannot write ${etc_hosts}"
 
-    fail "NOT YET IMPLEMENTED"
+    local occurences
+    occurences=$(cat ${etc_hosts} | grep "^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]* *${name}$" | wc -l)
 
+    if [ ${occurences} -gt 1 ]; then
+        fail "${etc_hosts} contains more than one '${name}' occurences"
+    elif [ ${occurences} -eq 1 ]; then
+        # host name exists
+        local tmp=$(unique-file)
+        sed -e 's/^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]* *'"${name}"'$/'"${ip} ${name}"'/' ${etc_hosts} > ${tmp}
+        diff ${etc_hosts} ${tmp} > /dev/null && { rm ${tmp}; return 1; } # no update, content already in file, return
+        move ${tmp} ${etc_hosts}
+    else
+        # host name does not exist in the file, append it at the end
+        echo "${ip} ${name}" >> ${etc_hosts} || fail "failed to append to ${etc_hosts}"
+    fi
 
-#    if grep -q "^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*[ \t]*"${name}"$" /etc/hosts; then
-#        # host exists
-#
-#    else
-#        # host name does not exist, append it at the end
-#        echo "${ip} ${name}" >> /etc/hosts || fail "failed to append to /etc/hosts"
-#    fi
-
-
+    return 0
 }
+
+#
+# Read the IP associated with the given hostname in /etc/hosts and return it. Return empty string if the hostname
+# is not found.
+#
+function resolve-ip
+{
+    local name=$1
+    local etc_hosts=$2 # optional, for testing
+
+    [ "${name}" = "" ] && fail "${FUNCNAME[0]}: 'name' not specified"
+    [ "${etc_hosts}" = "" ] && etc_hosts=/etc/hosts
+
+    local ip
+    ip=$(cat /etc/hosts | grep "^.* ${name}$") || fail "failed to look up IP address for ${name} in /etc/hosts"
+    ip=${ip% *}
+    echo ${ip}
+}
+
+########################################################################################################################
+#
+########################################################################################################################

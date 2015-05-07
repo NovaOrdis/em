@@ -1,10 +1,9 @@
 #!/bin/bash
 
-[ -f $(dirname $0)/../../lib/em.shlib ] && . $(dirname $0)/../../lib/em.shlib || { echo "$(dirname $0)/../../lib/em.shlib not found" 1>&2; exit 1; }
-[ -f $(dirname $0)/../../lib/linux.shlib ] && . $(dirname $0)/../../lib/linux.shlib || { echo "$(dirname $0)/../../lib/linux.shlib not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
+lib=$(dirname $0)/../../lib/linux.shlib ; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 
-# also load the individual command lib file if available
-[ -f $(dirname $0)/lib/$(basename $0).shlib ] && . $(dirname $0)/lib/$(basename $0).shlib
 
 function usage()
 {
@@ -37,9 +36,9 @@ function main()
     for i in ${running_instances_name_and_public_ip}; do
         local name=${i%%:*}
         local ip=${i##*:}
-        info "${name} ${ip}"
-        #update-etc-hosts ${name} ${ip}
-        #make_login_links "${name_and_public_ip_for_running_instances}"
+        debug "running instance: ${name}/${ip}"
+        update-etc-hosts ${name} ${ip} && info "${name} address has been updated in /etc/hosts" || debug "/etc/hosts not updated"
+        make-login-shortcut-link $(config LOGIN_SHORTCUT_LINK_DIR) ${name} && info "shortcut link ${name} created" || debug "no shortcut link created"
     done
 }
 

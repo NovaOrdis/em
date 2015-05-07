@@ -1,24 +1,36 @@
 #!/bin/bash
 
 #
-# make the login links if necessary
+# Make login shortcut link if necessary
 #
-function make_login_links()
+# return 0 if a link has indeed been made, or 1 if the host was already linked
+#
+function make-login-shortcut-link()
 {
-    local name_colon_public_ip_space_separated_list=$1 # example "f01:1.1.1.1 f02:2.2.2.2"
+    debug-arguments $@
 
-    for i in ${name_colon_public_ip_space_separated_list}; do
-        local name=${i%:*}
+    local link_dir=$1
+    local hostname=$2
 
-        if [ ! -h ~/bin/ec2/${name} ]; then
-            local ec2_ssh
-            ec2_ssh=$(dirname $0)/ec2-ssh
-            # make sure it's an absolute path
-            [ ${ec2_ssh:0:1} = "/" ] || fail "${ec2_ssh} is not an absolute path, TODO: improve the script to determine the absolute path"
-            [ -x ${ec2_ssh} ] || fail "${ec2_ssh} does not exist or is not executable"
-            debug "linking ${ec2_ssh} as ~/bin/ec2/${name}"
-            (cd ~/bin/ec2/; ln -s ${ec2_ssh} ${name}) && info "${name} link created"
-        fi
-    done
+    [ "${link_dir}" = "" ] && fail "${FUNCNAME[0]}: 'link_dir' not specified"
+    [ -d ${link_dir} ] || fail "${FUNCNAME[0]}: ${link_dir} is not a directory"
+
+    [ -h ${link_dir}/${hostname} ] && return 1
+
+    #
+    # this is most likely run by a command, express the path to the login script relative to it
+    #
+
+    local login_script=$(dirname $0)
+    login_script=${login_script%/*}
+    login_script=${login_script}/login
+
+    debug "login script: ${login_script}"
+
+    [ "${login_script:0:1}" = "/" ] || fail "the login script path ${login_script} is not an absolute path"
+    [ -x ${login_script} ] || fail "the login script ${login_script} does not exist or is not executable"
+
+    ln -s ${login_script} ${link_dir}/${hostname} && return 0 || fail "failed to create symbolic link"
+
 }
 
