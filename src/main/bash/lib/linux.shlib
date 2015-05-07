@@ -3,8 +3,8 @@
 #
 # Functions required to interact (read values, configure) with a Linux system.
 #
-# All generic functions and settings from em.shlib will be available here because this file will be sources
-# *after* em.shlib
+# All generic functions and settings from std.shlib will be available here because this file will be sources
+# *after* std.shlib
 #
 
 ########################################################################################################################

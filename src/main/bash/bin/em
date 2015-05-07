@@ -1,8 +1,8 @@
 #!/bin/bash
 
-lib=$(dirname $0)/../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 
-export version=1.0
+export version=2.5
 export release_date="05/06/15"
 
 args=""
@@ -15,6 +15,10 @@ Environment Manager
 
 Version       ${version}
 Release Date: ${release_date}
+
+Commands:
+
+$(list-em-commands)
 
 EOF
 
