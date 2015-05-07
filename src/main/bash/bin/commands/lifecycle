@@ -15,9 +15,7 @@ $(echo ${mode:0:1} | tr '[:lower:]' '[:upper:]')${mode:1}s the specified instanc
 
 Usage:
 
-    ${mode} <instance-name>
-
-Currently, the instances can be only ${mode}ed one at a time (TODO).
+    ${mode} <instance-name> [instance-name ...]
 
 EOF
 exit 0
