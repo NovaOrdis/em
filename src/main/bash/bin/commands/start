@@ -3,12 +3,17 @@
 lib=$(dirname $0)/../../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 
-
 function usage()
 {
 cat <<EOF
 
-TODO
+Starts the specified instance.
+
+Usage:
+
+    $(basename $0) <instance-name>
+
+Currently, the instances can be only started one at a time (TODO).
 
 EOF
 exit 0
@@ -22,44 +27,23 @@ function main()
 
     ${help} && usage;
 
+    local name
+    for i in ${args}; do
+        [ "${name}" = "" ] && name=${i} || fail "currently we only support starting one instance at a time"
+    done
+
+    [ "${name}" = "" ] && fail "instance name not specified"
+
+    local id=$(ec2-describe-instances | jw ec2.ec2_describe_instances_parser --filter name=${name} --list id) || { exit 1; }
+
+    [ "${id}" = "" ] && exit 1
+
+    info "starting ${id} ..."
+
+    ec2-start-instances ${id} || fail "failed to start"
+
 }
 
 main $@
 
 
-#
-#function display_help()
-#{
-#cat <<EOF
-#
-#Starts the specified instance.
-#
-#Usage:
-#
-#    $(basename $0) <instance-name>
-#
-#Currently, the instances can be only started one at a time (TODO).
-#
-#EOF
-#}
-#
-#function main()
-#{
-#    process_common_options $@
-#
-#    [ "${args}" = "" ] && { display_help; exit 1; }
-#
-#    local name
-#    for i in ${args}; do
-#        [ "${name}" = "" ] && name=${i} || fail "currently we only support starting one instance at a time"
-#    done
-#
-#    local id=$(ec2-describe-instances | $(dirname $0)/em-java-launcher ${debug_arg} Ec2DescribeInstancesParser --filter name=${name} --list id) || { exit 1; }
-#
-#    info "starting ${id} ..."
-#
-#    ec2-start-instances ${id}
-#
-#}
-#
-#main $@
