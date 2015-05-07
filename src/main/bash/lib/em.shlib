@@ -1,0 +1,15 @@
+#!/bin/bash
+
+function list-em-commands()
+{
+    local command_dir=$(dirname $0)/commands
+    [ -d ${command_dir} ] || fail "command directory ${command_dir} not found"
+
+    commands=$(ls ${command_dir})
+    excludes="lib lifecycle"
+    for i in ${commands}; do
+        [[ "${excludes}" =~ ${i} ]] && continue;
+
+        echo "    ${i}"
+    done
+}
