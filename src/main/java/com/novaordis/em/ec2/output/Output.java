@@ -92,7 +92,7 @@ public class Output
         // initialize with the size of the output literals
         for(int i = 0; i < outputFields.size(); i ++)
         {
-            widths[i] = outputFields.get(i).getOutputLiteral().length();
+            widths[i] = outputFields.get(i).getLiteral().length();
         }
 
         // do two passes, first to calibrate and the second to render
@@ -128,7 +128,7 @@ public class Output
 
         for(int i = 0; i < outputFields.size(); i ++)
         {
-            out.print(String.format(format[i], outputFields.get(i).getOutputLiteral()));
+            out.print(String.format(format[i], outputFields.get(i).getLiteral()));
         }
 
         out.println();

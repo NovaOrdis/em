@@ -1,0 +1,59 @@
+#!/bin/bash
+
+lib=$(dirname $0)/../../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
+
+function usage()
+{
+cat <<EOF
+
+$(echo ${mode:0:1} | tr '[:lower:]' '[:upper:]')${mode:1}s the specified instance.
+
+Usage:
+
+    ${mode} <instance-name>
+
+Currently, the instances can be only ${mode}ed one at a time (TODO).
+
+EOF
+exit 0
+}
+
+function main()
+{
+    process-common-arguments $@
+
+    debug "$(basename $0) command line arguments: $@"
+
+    local mode=$(basename $0)
+
+    if [ "${mode}" = "start" -o "${mode}" = "stop" ]; then
+        debug "mode: ${mode}"
+    else
+        fail "unknown or unsupported mode: '${mode}'"
+    fi
+
+    ${help} && usage;
+
+    local name
+    for i in ${args}; do
+        [ "${name}" = "" ] && name=${i} || fail "currently we only support ${mode}ing one instance at a time"
+    done
+
+    [ "${name}" = "" ] && fail "instance name(s) not specified"
+
+    local id=$(ec2-describe-instances | jw ec2.ec2_describe_instances_parser --filter name=${name} --list id) || { exit 1; }
+
+    [ "${id}" = "" ] && exit 1
+
+    info "${mode}ing ${id} ..."
+
+    local command="ec2-${mode}-instances ${id}"
+
+    ${command} || fail "failed to ${mode}"
+
+}
+
+main $@
+
+

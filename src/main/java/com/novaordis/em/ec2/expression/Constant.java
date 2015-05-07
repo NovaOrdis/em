@@ -1,56 +1,74 @@
-package com.novaordis.em.ec2.model;
+package com.novaordis.em.ec2.expression;
 
-import com.novaordis.em.ec2.expression.Expression;
-import com.novaordis.em.ec2.expression.ExpressionFactory;
-import org.apache.log4j.Logger;
+import com.novaordis.em.ec2.expression.operator.Operator;
+import com.novaordis.em.ec2.model.VariableResolver;
 
 /**
- * The encapsulation of a logical expression that must evaluate to true in order for the underlying instance to be
- * included in the result.
- *
- * Examples:
- *
- * name=f01
- *
- * name=f01|f02|f03
- *
  * @author <a href="mailto:ovidiu@novaordis.com">Ovidiu Feodorov</a>
  *
  * Copyright 2015 Nova Ordis LLC
  */
-public class Filter
+public class Constant implements Expression
 {
     // Constants -------------------------------------------------------------------------------------------------------
-
-    private static final Logger log = Logger.getLogger(Filter.class);
 
     // Static ----------------------------------------------------------------------------------------------------------
 
     // Attributes ------------------------------------------------------------------------------------------------------
 
-    private Expression expression;
+    private final Object value;
 
     // Constructors ----------------------------------------------------------------------------------------------------
 
-    public Filter(String expressionLiteral) throws Exception
+    public Constant(Object value)
     {
-        this.expression = ExpressionFactory.create(FieldBasedVariableBuilder.getInstance(), expressionLiteral);
-        log.debug(this + " created");
+        this.value = value;
+    }
+
+    // Expression implementation ---------------------------------------------------------------------------------------
+
+    @Override
+    public String getLiteral()
+    {
+        return value == null ? null : value.toString();
+    }
+
+    @Override
+    public Operator getOperator()
+    {
+        return null;
+    }
+
+    /**
+     * @see Expression#evaluate(VariableResolver
+     */
+    @Override
+    public Object evaluate(VariableResolver variableResolver) throws EvaluationException
+    {
+        return value;
     }
 
     // Public ----------------------------------------------------------------------------------------------------------
 
-    public boolean allows(Instance instance) throws Exception
+    public Object getValue()
     {
-        boolean allowed = (Boolean)expression.evaluate(instance);
-        log.debug("instance " + instance + " is " + (allowed ? "allowed" : "rejected") + " by filter " + this);
-        return allowed;
+        return value;
     }
 
     @Override
     public String toString()
     {
-        return "" + expression;
+        if (value == null)
+        {
+            return null;
+        }
+
+        if (value instanceof String)
+        {
+            return "'" + value + "'";
+        }
+
+        return value.toString();
     }
 
     // Package protected -----------------------------------------------------------------------------------------------

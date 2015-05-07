@@ -7,9 +7,10 @@ package com.novaordis.em.ec2.model;
  */
 public enum InstanceState
 {
-    STOPPED("stopped"),
     RUNNING("running"),
     PENDING("pending"),
+    STOPPING("stopping"),
+    STOPPED("stopped"),
     SHUTTING_DOWN("shutting-down"),
     TERMINATED("terminated");
 

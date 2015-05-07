@@ -1,5 +1,8 @@
 package com.novaordis.em.ec2.model;
 
+import com.novaordis.em.ec2.expression.FieldBasedVariable;
+import com.novaordis.em.ec2.expression.Variable;
+
 import java.net.InetAddress;
 
 /**
@@ -7,7 +10,7 @@ import java.net.InetAddress;
  *
  * Copyright 2015 Nova Ordis LLC
  */
-public class Instance
+public class Instance implements FieldResolver
 {
     // Constants -------------------------------------------------------------------------------------------------------
 
@@ -31,6 +34,52 @@ public class Instance
     public Instance(String id)
     {
         this.id = id;
+    }
+
+    // VariableResolver implementation ---------------------------------------------------------------------------------
+
+    @Override
+    public Object getValue(Variable variable)
+    {
+        if (!(variable instanceof FieldBasedVariable))
+        {
+            return null;
+        }
+
+        Field field = ((FieldBasedVariable)variable).getDelegate();
+
+        return getValue(field);
+    }
+
+    // FieldResolver implementation ------------------------------------------------------------------------------------
+
+    @Override
+    public Object getValue(Field field)
+    {
+        if (InstanceField.ID.equals(field))
+        {
+            return id;
+        }
+        else if (InstanceField.NAME.equals(field))
+        {
+            return name;
+        }
+        else if (InstanceField.STATE.equals(field))
+        {
+            return state;
+        }
+        else if (InstanceField.PUBLIC_IP.equals(field))
+        {
+            return publicIp;
+        }
+        else if (InstanceField.PRIVATE_IP.equals(field))
+        {
+            return privateIp;
+        }
+        else
+        {
+            return null;
+        }
     }
 
     // Public ----------------------------------------------------------------------------------------------------------
@@ -112,33 +161,6 @@ public class Instance
         return state;
     }
 
-    public Object get(InstanceField field)
-    {
-        if (InstanceField.ID.equals(field))
-        {
-            return id;
-        }
-        else if (InstanceField.NAME.equals(field))
-        {
-            return name;
-        }
-        else if (InstanceField.STATE.equals(field))
-        {
-            return state;
-        }
-        else if (InstanceField.PUBLIC_IP.equals(field))
-        {
-            return publicIp;
-        }
-        else if (InstanceField.PRIVATE_IP.equals(field))
-        {
-            return privateIp;
-        }
-        else
-        {
-            return null;
-        }
-    }
 
     @Override
     public String toString()

@@ -32,19 +32,19 @@ public class InstanceTest
         Instance i = new Instance();
 
         assertNull(i.getId());
-        assertNull(i.get(InstanceField.ID));
+        assertNull(i.getValue(InstanceField.ID));
 
         i.setId("i-0ea9c7f8");
 
         assertEquals("i-0ea9c7f8", i.getId());
-        assertEquals("i-0ea9c7f8", i.get(InstanceField.ID));
+        assertEquals("i-0ea9c7f8", i.getValue(InstanceField.ID));
 
         // attempt to set the same value
 
         i.setId("i-0ea9c7f8");
 
         assertEquals("i-0ea9c7f8", i.getId());
-        assertEquals("i-0ea9c7f8", i.get(InstanceField.ID));
+        assertEquals("i-0ea9c7f8", i.getValue(InstanceField.ID));
 
         // attempt to set a different value
 
@@ -59,7 +59,7 @@ public class InstanceTest
         }
 
         assertEquals("i-0ea9c7f8", i.getId());
-        assertEquals("i-0ea9c7f8", i.get(InstanceField.ID));
+        assertEquals("i-0ea9c7f8", i.getValue(InstanceField.ID));
     }
 
     @Test
@@ -68,12 +68,12 @@ public class InstanceTest
         Instance i = new Instance();
 
         assertNull(i.getName());
-        assertNull(i.get(InstanceField.NAME));
+        assertNull(i.getValue(InstanceField.NAME));
 
         i.setName("blah");
 
         assertEquals("blah", i.getName());
-        assertEquals("blah", i.get(InstanceField.NAME));
+        assertEquals("blah", i.getValue(InstanceField.NAME));
     }
 
     @Test
@@ -82,12 +82,12 @@ public class InstanceTest
         Instance i = new Instance();
 
         assertNull(i.getState());
-        assertNull(i.get(InstanceField.STATE));
+        assertNull(i.getValue(InstanceField.STATE));
 
         i.setState(InstanceState.RUNNING);
 
         assertEquals(InstanceState.RUNNING, i.getState());
-        assertEquals(InstanceState.RUNNING, i.get(InstanceField.STATE));
+        assertEquals(InstanceState.RUNNING, i.getValue(InstanceField.STATE));
     }
 
     @Test

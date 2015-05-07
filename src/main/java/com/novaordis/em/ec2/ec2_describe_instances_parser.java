@@ -226,11 +226,15 @@ public class ec2_describe_instances_parser
     {
         // currently we only handle just one filter
 
-        int i = arg.indexOf('=');
-        String fieldName = arg.substring(0, i);
-        String fieldValue = arg.substring(i + 1);
-        InstanceField field = InstanceField.toInstanceField(fieldName);
-        Filter filter = new Filter(field, fieldValue);
+        Filter filter;
+        try
+        {
+            filter = new Filter(arg);
+        }
+        catch(Exception e)
+        {
+            throw new UserErrorException("invalid filter \"" + arg + "\"", e);
+        }
         filters.add(filter);
     }
 
@@ -239,13 +243,23 @@ public class ec2_describe_instances_parser
      */
     private void addWithFilter(Instance instance)
     {
-        for(Filter f: filters)
+        for(Filter filter : filters)
         {
-            if (!f.allows(instance))
+            try
             {
-                log.debug("instance " + instance + " was filtered out by " + f);
+                if (!filter.allows(instance))
+                {
+                    log.debug("filter " + filter + " rejected instance " + instance);
+                    return;
+                }
+
+            }
+            catch(Exception e)
+            {
+                log.warn("filter " + filter + " failed to evaluate instance " + instance + " and will reject it", e);
                 return;
             }
+
         }
 
         instances.add(instance);

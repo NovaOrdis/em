@@ -117,7 +117,7 @@ public class InstanceParser
     }
 
     /**
-     * @return true if the instance being parsed is complete (and subsequent invocations of parse(...) on this parser
+     * @return true if the instance being parsed is complete (and subsequent invocations of create(...) on this parser
      * instance will return false, or false otherwise.
      */
     public boolean isComplete()

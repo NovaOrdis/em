@@ -3,8 +3,6 @@ package com.novaordis.em.ec2.model;
 import java.net.InetAddress;
 
 /**
- * @author <a href="mailto:ovidiu@novaordis.com">Ovidiu Feodorov</a>
- *
  * Fields that are not handled yet:
  *
  * "Amazon Machine Image": "ami-4dbf9e7d" (Red Hat Enterpirse Linux 7.1 (HVM) SSD volume type), etc.
@@ -19,13 +17,11 @@ import java.net.InetAddress;
  *
  * "Subnet" subnet-53993c24 default in us-west-2b
  *
- *
- *
- *
+ * @author <a href="mailto:ovidiu@novaordis.com">Ovidiu Feodorov</a>
  *
  * Copyright 2015 Nova Ordis LLC
  */
-public enum InstanceField
+public enum InstanceField implements Field
 {
     ID("id"),
     NAME("name"),
@@ -33,22 +29,26 @@ public enum InstanceField
     PRIVATE_IP("private-ip"),
     STATE("state");
 
-    private String commandLineLiteral;
+    // Attributes ------------------------------------------------------------------------------------------------------
+
+    private String literal;
+
+    // Constructors ----------------------------------------------------------------------------------------------------
 
     InstanceField(String commandLineLiteral)
     {
-        this.commandLineLiteral = commandLineLiteral;
+        this.literal = commandLineLiteral;
     }
 
-    public String getCommandLineLiteral()
+    // Field implementation --------------------------------------------------------------------------------------------
+
+    @Override
+    public String getLiteral()
     {
-        return commandLineLiteral;
+        return literal;
     }
 
-    public String getOutputLiteral()
-    {
-        return commandLineLiteral;
-    }
+    // Public ----------------------------------------------------------------------------------------------------------
 
     public static InstanceField toInstanceField(String commandLineLiteral)
     {
@@ -59,7 +59,7 @@ public enum InstanceField
 
         for(InstanceField f : InstanceField.values())
         {
-            if (f.getCommandLineLiteral().equalsIgnoreCase(commandLineLiteral))
+            if (f.getLiteral().equalsIgnoreCase(commandLineLiteral))
             {
                 return f;
             }

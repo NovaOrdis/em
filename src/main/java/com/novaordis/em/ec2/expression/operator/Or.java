@@ -1,56 +1,45 @@
-package com.novaordis.em.ec2.model;
+package com.novaordis.em.ec2.expression.operator;
 
 import com.novaordis.em.ec2.expression.Expression;
-import com.novaordis.em.ec2.expression.ExpressionFactory;
 import org.apache.log4j.Logger;
 
 /**
- * The encapsulation of a logical expression that must evaluate to true in order for the underlying instance to be
- * included in the result.
- *
- * Examples:
- *
- * name=f01
- *
- * name=f01|f02|f03
- *
  * @author <a href="mailto:ovidiu@novaordis.com">Ovidiu Feodorov</a>
  *
  * Copyright 2015 Nova Ordis LLC
  */
-public class Filter
+public class Or implements BinaryOperator
 {
     // Constants -------------------------------------------------------------------------------------------------------
 
-    private static final Logger log = Logger.getLogger(Filter.class);
+    private static final Logger log = Logger.getLogger(Or.class);
 
     // Static ----------------------------------------------------------------------------------------------------------
 
     // Attributes ------------------------------------------------------------------------------------------------------
 
-    private Expression expression;
-
     // Constructors ----------------------------------------------------------------------------------------------------
 
-    public Filter(String expressionLiteral) throws Exception
+    // BinaryOperator implementation -----------------------------------------------------------------------------------
+
+    @Override
+    public String getLiteral()
     {
-        this.expression = ExpressionFactory.create(FieldBasedVariableBuilder.getInstance(), expressionLiteral);
-        log.debug(this + " created");
+        return "|";
+    }
+
+    @Override
+    public Object evaluate(Expression leftOperand, Expression rightOperand)
+    {
+        throw new RuntimeException("NYE");
     }
 
     // Public ----------------------------------------------------------------------------------------------------------
 
-    public boolean allows(Instance instance) throws Exception
-    {
-        boolean allowed = (Boolean)expression.evaluate(instance);
-        log.debug("instance " + instance + " is " + (allowed ? "allowed" : "rejected") + " by filter " + this);
-        return allowed;
-    }
-
     @Override
     public String toString()
     {
-        return "" + expression;
+        return "|";
     }
 
     // Package protected -----------------------------------------------------------------------------------------------

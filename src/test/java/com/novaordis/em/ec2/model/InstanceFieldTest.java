@@ -3,6 +3,8 @@ package com.novaordis.em.ec2.model;
 import org.apache.log4j.Logger;
 import org.junit.Test;
 
+import java.net.InetAddress;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
@@ -75,6 +77,8 @@ public class InstanceFieldTest
         assertEquals(InstanceField.ID, field);
         String s = field.fromInstance(new Instance("i-0ea9c7f8"));
         assertEquals("i-0ea9c7f8", s);
+
+        assertEquals("i-0ea9c7f8", field.fromString("i-0ea9c7f8"));
     }
 
     // NAME ------------------------------------------------------------------------------------------------------------
@@ -88,6 +92,8 @@ public class InstanceFieldTest
         i.setName("f01");
         String s = field.fromInstance(i);
         assertEquals("f01", s);
+
+        assertEquals("apple", field.fromString("apple"));
     }
 
     // PUBLIC_IP -------------------------------------------------------------------------------------------------------
@@ -101,6 +107,23 @@ public class InstanceFieldTest
         i.setPublicIp("54.149.178.21");
         String s = field.fromInstance(i);
         assertEquals("54.149.178.21", s);
+
+        assertEquals(InetAddress.getByName("127.9.9.9"), field.fromString("127.9.9.9"));
+    }
+
+    // PRIVATE_IP -------------------------------------------------------------------------------------------------------
+
+    @Test
+    public void PRIVATE_IP() throws Exception
+    {
+        InstanceField field = InstanceField.toInstanceField("private-ip");
+        assertEquals(InstanceField.PRIVATE_IP, field);
+        Instance i = new Instance("i-0ea9c7f8");
+        i.setPrivateIp("54.149.178.21");
+        String s = field.fromInstance(i);
+        assertEquals("54.149.178.21", s);
+
+        assertEquals(InetAddress.getByName("127.9.9.9"), field.fromString("127.9.9.9"));
     }
 
     // STATE -----------------------------------------------------------------------------------------------------------
@@ -114,6 +137,8 @@ public class InstanceFieldTest
         i.setState(InstanceState.RUNNING);
         String s = field.fromInstance(i);
         assertEquals("running", s);
+
+        assertEquals(InstanceState.SHUTTING_DOWN, field.fromString("shutting-down"));
     }
 
     @Test
