@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# return 0 if installed, 1 otherwise
+function installed()
+{
+    debug "checking whether the GLD client is installed already ..."
+
+    return 1
+}

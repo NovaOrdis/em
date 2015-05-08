@@ -31,23 +31,23 @@ function main()
     ${help} && usage;
 
     local name
-    local profile
-    local is_profile=false
+    local overlay
+    local is_overlay=false
 
     for i in ${args}; do
-        [ "${i}" = "--profile" ] && { is_profile=true; continue; }
-        ${is_profile} && { is_profile=false; profile=${i}; continue; }
+        [ "${i}" = "--overlay" ] && { is_overlay=true; continue; }
+        ${is_overlay} && { is_overlay=false; overlay=${i}; continue; }
         [ "${name}" = "" ] && name=${i} || name="${name} ${i}"
     done
 
-    debug "profile: ${profile}"
+    debug "overlay: ${overlay}"
     debug "name: ${name}"
 
     [ "${name/ //}" != "${name}" ] && fail "currently we can only update an instance at a time"
 
-    [ -f $(dirname $0)/../profiles/${profile} ] || fail "profile $(dirname $0)/../profiles/${profile} does not exist"
+    [ -f $(dirname $0)/../overlays/${overlay} ] || fail "overlay $(dirname $0)/../overlays/${overlay} does not exist"
 
-    info "updating ${name} using profile ${profile} ..."
+    info "updating ${name} by applying overlay ${overlay} ..."
 
     #
     # tar gz the em bits that are needed remote; we don't use zip because zip/unzip might not be installed yet
@@ -61,7 +61,7 @@ function main()
 
     debug "tar_root: ${tar_root}"
 
-    (cd ${tar_root}; tar cf${tar_verbose} - bin/profiles lib | gzip ${gzip_quiet} > ${gzip_file}) || fail "failed to create ${gzip_file}"
+    (cd ${tar_root}; tar cf${tar_verbose} - bin/overlays lib | gzip ${gzip_quiet} > ${gzip_file}) || fail "failed to create ${gzip_file}"
 
     debug "gzip file ${gzip_file} created"
 
@@ -83,10 +83,10 @@ function main()
     ${scp_command} || fail "failed to scp to ${ssh_url}"
 
     #
-    # execute the profile on the target instance
+    # execute the overlay on the target instance
     #
 
-    local ssh_command="ssh -i $(get-installation-identity-file) ${ssh_url} cd /tmp; mkdir em; cd em; tar xfz${tar_verbose} ../$(basename ${gzip_file}); cd ..; rm ${gzip_file}; ./em/bin/profiles/${profile}"
+    local ssh_command="ssh -i $(get-installation-identity-file) ${ssh_url} cd /tmp; [ ! -d ./em ] && mkdir em; cd em; tar xfz${tar_verbose} ../$(basename ${gzip_file}); cd ..; rm ${gzip_file}; ./em/bin/overlays/${overlay} $(serialize-common-arguments)"
     debug "ssh command: ${ssh_command}"
 
     ${ssh_command} || fail "failed to execute ssh command on ${ssh_url}"
