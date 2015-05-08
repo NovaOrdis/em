@@ -38,7 +38,7 @@ function to-ids()
 
     if [ "${names}" != "" ]; then
         remotely_resolved_ids=$(ec2-describe-instances | \
-            jw ec2.ec2_describe_instances_parser --filter name="${names}" --list id) || { exit 1; }
+            jw ec2.grep_instances name="${names}" --list id) || { exit 1; }
     fi
 
     debug "remotely_resolved_ids: ${remotely_resolved_ids}"

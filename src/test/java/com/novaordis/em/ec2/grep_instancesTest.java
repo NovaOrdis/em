@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
@@ -24,11 +25,11 @@ import static org.junit.Assert.fail;
  *
  * Copyright 2015 Nova Ordis LLC
  */
-public class ec2_describe_instances_parserTest
+public class grep_instancesTest
 {
     // Constants -------------------------------------------------------------------------------------------------------
 
-    private static final Logger log = Logger.getLogger(ec2_describe_instances_parserTest.class);
+    private static final Logger log = Logger.getLogger(grep_instancesTest.class);
 
     // Static ----------------------------------------------------------------------------------------------------------
 
@@ -45,7 +46,7 @@ public class ec2_describe_instances_parserTest
     {
         try
         {
-            new ec2_describe_instances_parser(new String[]{"--no-such-argument"});
+            new grep_instances(new String[]{"--no-such-argument"});
             fail("unknown argument, should fail with UserErrorException");
         }
         catch(UserErrorException e)
@@ -61,7 +62,7 @@ public class ec2_describe_instances_parserTest
     {
         try
         {
-            new ec2_describe_instances_parser(new String[]{"--list"});
+            new grep_instances(new String[]{"--list"});
             fail("nothing follows --list, should fail with UserErrorException");
         }
         catch(UserErrorException e)
@@ -73,52 +74,47 @@ public class ec2_describe_instances_parserTest
     @Test
     public void commandLine_CorrectList() throws Exception
     {
-        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[]{"--list", "name:public-ip"});
+        grep_instances g = new grep_instances(new String[]{"--list", "name:public-ip"});
 
-        List<InstanceField> fields = p.getOutputFields();
+        List<InstanceField> fields = g.getOutputFields();
 
         assertEquals(2, fields.size());
 
         assertEquals(InstanceField.NAME, fields.get(0));
         assertEquals(InstanceField.PUBLIC_IP, fields.get(1));
+
+        //
+        // test no filters
+        //
+        assertTrue(g.getFilters().isEmpty());
     }
 
-    // command line arguments: --filter --------------------------------------------------------------------------------
+    // command line arguments: implicit filter -------------------------------------------------------------------------
 
     @Test
-    public void commandLine_NothingFollowsFilter() throws Exception
+    public void commandLine_NoFilters() throws Exception
     {
-        try
-        {
-            new ec2_describe_instances_parser(new String[]{"--filters"});
-            fail("nothing follows --filter, should fail with UserErrorException");
-        }
-        catch(UserErrorException e)
-        {
-            log.info(e.getMessage());
-        }
+        grep_instances g = new grep_instances(new String[0]);
+
+        //
+        // test no filters
+        //
+
+        assertTrue(g.getFilters().isEmpty());
     }
 
     @Test
-    public void commandLine_FilterOutput() throws Exception
+    public void commandLine_OneFilter() throws Exception
     {
-        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[]{"--filter", "state=running"});
+        grep_instances p = new grep_instances(new String[]{"state=running"});
 
         List<Filter> filters = p.getFilters();
 
         assertEquals(1, filters.size());
 
-    }
+        Filter f = filters.get(0);
 
-    @Test
-    public void commandLine_FiltersOutput() throws Exception
-    {
-        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[]{"--filters", "state=running"});
-
-        List<Filter> filters = p.getFilters();
-
-        assertEquals(1, filters.size());
-
+        assertEquals("state=running", f.getLiteral());
     }
 
     // create() ---------------------------------------------------------------------------------------------------------
@@ -126,7 +122,7 @@ public class ec2_describe_instances_parserTest
     @Test
     public void noCommandOutputParsed() throws Exception
     {
-        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[0]);
+        grep_instances p = new grep_instances(new String[0]);
 
         try
         {
@@ -145,7 +141,7 @@ public class ec2_describe_instances_parserTest
         String input = "bogus line\n";
 
         BufferedReader br = new BufferedReader(new StringReader(input));
-        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[0]);
+        grep_instances p = new grep_instances(new String[0]);
 
         try
         {
@@ -183,7 +179,7 @@ public class ec2_describe_instances_parserTest
 
         BufferedReader br = new BufferedReader(new StringReader(input));
 
-        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[0]);
+        grep_instances p = new grep_instances(new String[0]);
         p.parse(br);
 
         br.close();
@@ -226,7 +222,7 @@ public class ec2_describe_instances_parserTest
 
         BufferedReader br = new BufferedReader(new StringReader(input));
 
-        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[0]);
+        grep_instances p = new grep_instances(new String[0]);
 
         p.parse(br);
 
@@ -271,7 +267,7 @@ public class ec2_describe_instances_parserTest
 
         BufferedReader br = new BufferedReader(new StringReader(input));
 
-        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[0]);
+        grep_instances p = new grep_instances(new String[0]);
 
         p.parse(br);
 
@@ -319,8 +315,8 @@ public class ec2_describe_instances_parserTest
 
         BufferedReader br = new BufferedReader(new StringReader(input));
 
-        ec2_describe_instances_parser p = new ec2_describe_instances_parser(
-            new String[] {"--filters", "state=running", "--list", "name:state:public-ip"});
+        grep_instances p = new grep_instances(
+            new String[] {"state=running", "--list", "name:state:public-ip"});
 
         p.parse(br);
 
@@ -373,7 +369,7 @@ public class ec2_describe_instances_parserTest
 
         BufferedReader br = new BufferedReader(new StringReader(input));
 
-        ec2_describe_instances_parser p = new ec2_describe_instances_parser(new String[0]);
+        grep_instances p = new grep_instances(new String[0]);
 
         p.parse(br);
 

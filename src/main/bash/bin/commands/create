@@ -35,7 +35,8 @@ function main()
         --block-device-mapping /dev/sda1=:10 \
         --subnet subnet-53993c24 \
         --instance-initiated-shutdown-behavior stop \
-        --associate-public-ip-address true
+        --associate-public-ip-address true | jw ec2.grep_instances --list id
+
 
 
 }

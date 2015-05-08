@@ -40,6 +40,14 @@ public class Filter
 
     // Public ----------------------------------------------------------------------------------------------------------
 
+    /**
+     * May return null.
+     */
+    public String getLiteral()
+    {
+        return expression == null ? null : expression.getLiteral();
+    }
+
     public boolean allows(Instance instance) throws Exception
     {
         boolean allowed = (Boolean)expression.evaluate(instance);

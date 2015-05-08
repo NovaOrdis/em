@@ -20,17 +20,23 @@ import java.util.StringTokenizer;
 
 /**
  * Parses the Amazon EC2 'ec2-describe-instances' command output and re-outputs the result according to the
- * "--output" flag specified on command line. Detailed usage in
+ * "--output" flag specified on command line.
+ *
+ * Usage:
+ *
+ * <pre>
+ *  grep_instances [filter] --list|--table <output-format>
+ * </pre>
  *
  * @author <a href="mailto:ovidiu@novaordis.com">Ovidiu Feodorov</a>
  *
  * Copyright 2015 Nova Ordis LLC
  */
-public class ec2_describe_instances_parser
+public class grep_instances
 {
     // Constants -------------------------------------------------------------------------------------------------------
 
-    private static final Logger log = Logger.getLogger(ec2_describe_instances_parser.class);
+    private static final Logger log = Logger.getLogger(grep_instances.class);
 
     // Static ----------------------------------------------------------------------------------------------------------
 
@@ -41,7 +47,7 @@ public class ec2_describe_instances_parser
         //noinspection TryFinallyCanBeTryWithResources
         try
         {
-            ec2_describe_instances_parser p = new ec2_describe_instances_parser(args);
+            grep_instances p = new grep_instances(args);
             p.parse(br);
             log.debug("\nec-describe-instance command output:\n" + p.getRawOutput());
             p.output();
@@ -62,7 +68,7 @@ public class ec2_describe_instances_parser
 
     // Constructors ----------------------------------------------------------------------------------------------------
 
-    public ec2_describe_instances_parser(String[] args) throws Exception
+    public grep_instances(String[] args) throws Exception
     {
         outputFields = new ArrayList<>();
         filters = new ArrayList<>();
@@ -181,14 +187,9 @@ public class ec2_describe_instances_parser
                 outputFormat = OutputFormat.valueOf(args[i].substring(2));
                 setOutputFields(args[++i]);
             }
-            else if ("--filter".equalsIgnoreCase(args[i]) || "--filters".equalsIgnoreCase(args[i]))
+            else if (!args[i].startsWith("--"))
             {
-                if (i == args.length - 1)
-                {
-                    throw new UserErrorException("filter definition(s) should follow --filter(s)");
-                }
-
-                setFilters(args[++i]);
+                setFilters(args[i]);
             }
             else
             {
@@ -246,6 +247,7 @@ public class ec2_describe_instances_parser
         {
             throw new UserErrorException("invalid filter \"" + arg + "\"", e);
         }
+
         filters.add(filter);
     }
 
