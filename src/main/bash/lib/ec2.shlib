@@ -36,8 +36,10 @@ function to-ids()
 
     local remotely_resolved_ids
 
-    [ "${names}" != "" ] && remotely_resolved_ids=$(ec2-describe-instances | \
-        jw ec2.ec2_describe_instances_parser --filter name="${names}" --list id) || { exit 1; }
+    if [ "${names}" != "" ]; then
+        remotely_resolved_ids=$(ec2-describe-instances | \
+            jw ec2.ec2_describe_instances_parser --filter name="${names}" --list id) || { exit 1; }
+    fi
 
     debug "remotely_resolved_ids: ${remotely_resolved_ids}"
 

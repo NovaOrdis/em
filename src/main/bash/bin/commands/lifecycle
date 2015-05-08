@@ -12,7 +12,7 @@ function usage()
 {
 cat <<EOF
 
-$(echo ${mode:0:1} | tr '[:lower:]' '[:upper:]')${mode:1}s the specified instance.
+$(echo ${mode:0:1} | tr '[:lower:]' '[:upper:]')${mode:1}s the specified instances.
 
 Usage:
 
@@ -32,7 +32,7 @@ function main()
 
     local mode=$(basename $0)
 
-    if [ "${mode}" = "start" -o "${mode}" = "stop" ]; then
+    if [ "${mode}" = "start" -o "${mode}" = "stop" -o "${mode}" = "terminate" ]; then
         debug "mode: ${mode}"
     else
         fail "unknown or unsupported mode: '${mode}'"
