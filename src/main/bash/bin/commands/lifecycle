@@ -1,6 +1,7 @@
 #!/bin/bash
 
 lib=$(dirname $0)/../../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../../lib/ec2.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 
 help=false
@@ -15,7 +16,9 @@ $(echo ${mode:0:1} | tr '[:lower:]' '[:upper:]')${mode:1}s the specified instanc
 
 Usage:
 
-    ${mode} <instance-name> [instance-name ...]
+    ${mode} <instance-name|instance-id> [instance-name|instance-id ...]
+
+Instance names and instance IDs can be mixed, the names will be correctly resolved to instance IDs.
 
 EOF
 exit 0
@@ -37,18 +40,9 @@ function main()
 
     ${help} && usage;
 
-    [ "${args}" = "" ] && fail "instance name(s) not specified"
+    local ids
 
-    local names=""
-    for i in ${args}; do
-        [ "${names}" = "" ] && names="${i}" || names="${names}|${i}"
-    done
-
-    debug "names: ${names}"
-
-    local ids=$(ec2-describe-instances | jw ec2.ec2_describe_instances_parser --filter name="${names}" --list id) || { exit 1; }
-
-    [ "${ids}" = "" ] && exit 1
+    ids=$(to-ids ${args}) || { exit 1; }
 
     info "${mode}ing ${ids} ..."
 

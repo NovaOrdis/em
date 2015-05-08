@@ -160,15 +160,26 @@ function jw()
     done
 
     #
-    # location - in most cases, jw is run by a command, so the relative path to the etc directory is ../../etc
+    # location - if EM_HOME is set, use that, if not, in most cases, jw is run by a command, so the relative path to
+    # the etc directory is ../../etc
     #
 
-    local etc_dir=$(dirname $0)/../../etc
+    local etc_dir
+    local em_jar_dir
+
+    if [ "${EM_HOME}" != "" ]; then
+        etc_dir=${EM_HOME}/etc
+        em_jar_dir=${EM_HOME}/../../../target
+     else
+        etc_dir=$(dirname $0)/../../etc
+        em_jar_dir=$(dirname $0)/../../../../../target
+    fi
 
     [ -d ${etc_dir} ] || fail "the em etc directory ${etc_dir} does not seem to be accessible"
+    [ -d ${em_jar_dir} ] || fail "the em jar directory ${em_jar_dir} does not seem to be accessible"
 
     local classpath="\
-$(dirname $0)/../../../../../target/em-1.0-SNAPSHOT.jar:\
+${em_jar_dir}/em-1.0-SNAPSHOT.jar:\
 ${etc_dir}:\
 ${M2}/log4j/log4j/1.2.16/log4j-1.2.16.jar"
 

@@ -1,0 +1,54 @@
+#!/bin/bash
+
+#
+# Functions used in interaction with ec2
+#
+
+#
+# returns 0 if the given argument is an instance ID or 1 otherwise
+#
+function is-instance-id()
+{
+    echo $1 | grep -iq "^i-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]$"
+}
+
+#
+# gets a mixture of names and IDs as postional parameters and converts them to IDs, also performing
+# some consistency checking
+#
+function to-ids()
+{
+    [ "$1" = "" ] && fail "no instance names or ids specified"
+
+    local ids
+    local names
+    while [ "$1" != "" ]; do
+        if is-instance-id ${1}; then
+            [ "${ids}" = "" ] && ids="$1" || ids="${ids} $1"
+        else
+            [ "${names}" = "" ] && names="$1" || names="${names}|$1"
+        fi
+        shift;
+    done
+
+    debug "ids:   ${ids}"
+    debug "names: ${names}"
+
+    local remotely_resolved_ids
+
+    [ "${names}" != "" ] && remotely_resolved_ids=$(ec2-describe-instances | \
+        jw ec2.ec2_describe_instances_parser --filter name="${names}" --list id) || { exit 1; }
+
+    debug "remotely_resolved_ids: ${remotely_resolved_ids}"
+
+    ids="${ids} ${remotely_resolved_ids}"
+
+    ids=${ids%%[[:space:]]}
+    ids=${ids##[[:space:]]}
+
+    debug "ids: ${ids}"
+
+    [ "${ids}" = "" ] && fail "no valid instances specified, either by id or name"
+
+    echo ${ids}
+}
