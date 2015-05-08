@@ -30,7 +30,7 @@ function main()
 
     local name=${args}
 
-    info "crating instance ${name} ..."
+    info "creating instance ${name} ..."
 
     local new_instance_id
 
@@ -43,7 +43,7 @@ function main()
         --key installation_access \
         --group sg-bb3222de \
         --instance-type t2.micro \
-         --availability-zone us-west-2b \
+        --availability-zone us-west-2b \
         --tenancy default \
         --block-device-mapping /dev/sda1=:10 \
         --subnet subnet-53993c24 \

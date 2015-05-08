@@ -54,3 +54,46 @@ function to-ids()
 
     echo ${ids}
 }
+
+#
+# return 0 if we're located inside EC2, 1 otherwise
+#
+function in-ec2()
+{
+    return 1
+}
+
+function get-installation-identity-file()
+{
+    local file="$(dirname $0)/../../../resources/installation_access.pem"
+    [ -f ${file} ] || fail "installation identity file ${file} not found"
+    echo ${file}
+}
+
+#
+# Return the ssh url (user@ip) for the given instance name. The function is aware of the context and it will
+# return the most appropriate IP address: the public IP address (if available) if the function is executed outside
+# the environment or the private IP address if the function is executed inside the environment.
+#
+function ssh-url()
+{
+    local name=$1
+
+    debug-arguments $@
+
+    [ "${name}" = "" ] && fail "'name' not specified"
+
+    local ip
+
+    if in-ec2; then
+        # get the internal IP address from /etc/hosts
+        fail "NOT YET IMPLEMENTED"
+    else
+        # get the public IP address from /etc/hosts
+        ip=$(resolve-ip ${name}) || fail "failed to resolve IP for ${name}"
+    fi
+
+    local user=ec2-user
+
+    echo ${user}@${ip}
+}

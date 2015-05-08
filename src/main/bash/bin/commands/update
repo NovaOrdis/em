@@ -1,0 +1,99 @@
+#!/bin/bash
+
+lib=$(dirname $0)/../../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../../lib/ec2.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
+
+help=false
+args=""
+
+function usage()
+{
+cat <<EOF
+
+Update an existing instance. The instance must be in "running" state for this step to succeed.
+
+Currently we can only update an instance at a time. TODO: multiple parallel updates.
+
+EOF
+exit 0
+}
+
+function main()
+{
+    process-common-arguments $@
+
+    debug "$(basename $0) command line arguments: $@"
+
+    local mode=$(basename $0)
+
+    ${help} && usage;
+
+    local name
+    local profile
+    local is_profile=false
+
+    for i in ${args}; do
+        [ "${i}" = "--profile" ] && { is_profile=true; continue; }
+        ${is_profile} && { is_profile=false; profile=${i}; continue; }
+        [ "${name}" = "" ] && name=${i} || name="${name} ${i}"
+    done
+
+    debug "profile: ${profile}"
+    debug "name: ${name}"
+
+    [ "${name/ //}" != "${name}" ] && fail "currently we can only update an instance at a time"
+
+    [ -f $(dirname $0)/../profiles/${profile} ] || fail "profile $(dirname $0)/../profiles/${profile} does not exist"
+
+    info "updating ${name} using profile ${profile} ..."
+
+    #
+    # tar gz the em bits that are needed remote; we don't use zip because zip/unzip might not be installed yet
+    #
+
+    local gzip_file=$(unique-file).tar.gz
+    local tar_root=$(dirname $0)/../..
+    local gzip_quiet="-q"
+    local tar_verbose=""
+    ${verbose} && { gzip_quiet=""; tar_verbose="v"; }
+
+    debug "tar_root: ${tar_root}"
+
+    (cd ${tar_root}; tar cf${tar_verbose} - bin/profiles lib | gzip ${gzip_quiet} > ${gzip_file}) || fail "failed to create ${gzip_file}"
+
+    debug "gzip file ${gzip_file} created"
+
+    #
+    # scp em.zip and install it on the target instance
+    #
+
+    local ssh_url
+    ssh_url=$(ssh-url ${name}) || exit 1
+    debug "ssh_url: ${ssh_url}"
+
+    # when scping and sshing, we use the "installation" identity
+    local sqp_quiet="-q"
+    ${verbose} && scp_quiet=""
+    local scp_command="scp ${sqp_quiet} -i $(get-installation-identity-file) ${gzip_file} ${ssh_url}:/tmp"
+    debug "scp command: ${scp_command}"
+
+    info "staging tools on ${name} (${ssh_url}) ..."
+    ${scp_command} || fail "failed to scp to ${ssh_url}"
+
+    #
+    # execute the profile on the target instance
+    #
+
+    local ssh_command="ssh -i $(get-installation-identity-file) ${ssh_url} cd /tmp; mkdir em; cd em; tar xfz${tar_verbose} ../$(basename ${gzip_file}); cd ..; rm ${gzip_file}; ./em/bin/profiles/${profile}"
+    debug "ssh command: ${ssh_command}"
+
+    ${ssh_command} || fail "failed to execute ssh command on ${ssh_url}"
+
+    rm ${gzip_file} && debug "${gzip_file} removed"
+}
+
+main $@
+
+
