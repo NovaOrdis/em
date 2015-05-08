@@ -1,0 +1,15 @@
+#!/bin/bash
+
+#
+# Process "mode" so it displays well in a human readable form
+#
+function to-ing
+{
+    local mode=$1
+
+    [ "${mode}" = "terminate" ] && { echo "terminating"; return 0; }
+
+    echo "${mode}ing"
+
+}
+

@@ -25,7 +25,20 @@ function main()
 
     ${help} && usage;
 
-    ec2-run-instances ami-4dbf9e7d \
+    [ "${args}" = "" ] && fail "specify the instance name"
+    [ "${args/ //}" != "${args}" ] && fail "currently we only support creation of an instance at a time"
+
+    local name=${args}
+
+    info "crating instance ${name} ..."
+
+    local new_instance_id
+
+    #
+    # create the instance
+    #
+
+    new_instance_id=$(ec2-run-instances ami-4dbf9e7d \
         --instance-count 1 \
         --key installation_access \
         --group sg-bb3222de \
@@ -35,9 +48,17 @@ function main()
         --block-device-mapping /dev/sda1=:10 \
         --subnet subnet-53993c24 \
         --instance-initiated-shutdown-behavior stop \
-        --associate-public-ip-address true | jw ec2.grep_instances --list id
+        --associate-public-ip-address true | jw ec2.grep_instances --list id) || fail "instance creation failed"
 
+    [ "${new_instance_id}" = "" ] && fail "we could not detect the new instance id"
 
+    #
+    # set the Name TAG
+    #
+
+    ec2-create-tags ${new_instance_id} --tag Name=${name} || fail "the instance ${new_instance_id} was created but failed to set tag Name=${name}"
+
+    info "instance ${name} created, the instance id is ${new_instance_id}"
 
 }
 

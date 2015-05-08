@@ -2,7 +2,7 @@
 
 lib=$(dirname $0)/../../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/../../lib/ec2.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
-lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
+lib=$(dirname $0)/lib/lifecycle.shlib; [ -f ${lib} ] && . ${lib}
 
 help=false
 mode="start"
@@ -44,7 +44,7 @@ function main()
 
     ids=$(to-ids ${args}) || { exit 1; }
 
-    info "${mode}ing ${ids} ..."
+    info "$(to-ing ${mode}) ${ids} ..."
 
     local command="ec2-${mode}-instances ${ids}"
 
