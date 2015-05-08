@@ -1,14 +1,7 @@
 #!/bin/bash
-#
-# burn script - supposed to be run by root from the /tmp/.burn-in directory on the system that is being burned in
-#
-
-[ -f $(dirname $0)/em.shlib ] && . $(dirname $0)/em.shlib || { echo "$(dirname $0)/em.shlib not found" 1>&2; exit 1; }
 
 function main
 {
-    [ $(whoami) = "root" ] || { echo "this script is supposed to be executed by root, but it is executed by $(whoami)" 1>&2; exit 1; }
-
     local id
     local dry_run=false
     local java_archive_file

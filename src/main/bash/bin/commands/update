@@ -37,6 +37,7 @@ function main()
     for i in ${args}; do
         [ "${i}" = "--overlay" ] && { is_overlay=true; continue; }
         ${is_overlay} && { is_overlay=false; overlay=${i}; continue; }
+        [ "${i:0:2}" = "--" ] && fail "unknown update option ${i}";
         [ "${name}" = "" ] && name=${i} || name="${name} ${i}"
     done
 
@@ -79,17 +80,18 @@ function main()
     local scp_command="scp ${sqp_quiet} -i $(get-installation-identity-file) ${gzip_file} ${ssh_url}:/tmp"
     debug "scp command: ${scp_command}"
 
-    info "staging tools on ${name} (${ssh_url}) ..."
+    debug "staging tools on ${name} (${ssh_url}) ..."
     ${scp_command} || fail "failed to scp to ${ssh_url}"
 
     #
     # execute the overlay on the target instance
     #
 
-    local ssh_command="ssh -i $(get-installation-identity-file) ${ssh_url} cd /tmp; [ ! -d ./em ] && mkdir em; cd em; tar xfz${tar_verbose} ../$(basename ${gzip_file}); cd ..; rm ${gzip_file}; ./em/bin/overlays/${overlay} $(serialize-common-arguments)"
-    debug "ssh command: ${ssh_command}"
+    local remote_command="cd /tmp; [ ! -d ./em ] && mkdir em; cd em; tar xfz${tar_verbose} ../$(basename ${gzip_file}); cd ..; rm ${gzip_file}; ./em/bin/overlays/${overlay} $(serialize-common-arguments)"
+    local ssh_sudo_wrapper="ssh -i $(get-installation-identity-file) -t ${ssh_url} sudo -n bash -c \"${remote_command}\""
+    debug "ssh_sudo_wrapper: ${ssh_sudo_wrapper}"
 
-    ${ssh_command} || fail "failed to execute ssh command on ${ssh_url}"
+    ${ssh_sudo_wrapper} || fail "remote ${name} (${ssh_url}) command failed"
 
     rm ${gzip_file} && debug "${gzip_file} removed"
 }
