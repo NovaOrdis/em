@@ -1,0 +1,30 @@
+#!/bin/bash
+
+lib=$(dirname $0)/../../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
+
+function usage()
+{
+cat <<EOF
+
+Query the current Amazon EC2 region \$EC2_URL (${EC2_URL})
+and display the state the environment instances are in.
+
+
+EOF
+exit 0
+}
+
+function main()
+{
+    process-common-arguments $@
+
+    debug "$(basename $0) command line arguments: $@"
+
+    ${help} && usage;
+
+    ec2-describe-instances | jw ec2.ec2_describe_instances_parser --table name:state:id:public-ip:private-ip
+
+}
+
+main $@

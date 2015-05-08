@@ -74,6 +74,14 @@ public class InstanceParser
             header = line.substring(0, i);
         }
 
+        // verify if the header is not already in cache. If it is, it means we're stepped over the boundaries
+        // of an instance
+        if (lines.containsKey(header))
+        {
+            finish();
+            return false;
+        }
+
         boolean unknownHeader = true;
         for (String knownHeader : KNOWN_HEADERS)
         {
@@ -95,12 +103,12 @@ public class InstanceParser
             throw new IllegalArgumentException("unknown line header '" + header + "'");
         }
 
-        if (TAG.equalsIgnoreCase(header))
-        {
-            // this header is always the last in the series (so far)
-            parseAll();
-            complete = true;
-        }
+//        if (TAG.equalsIgnoreCase(header))
+//        {
+//            // this header is always the last in the series (so far); however, there are instances that do not
+//            // have a TAG line
+//            finish();
+//        }
 
         return true;
     }
@@ -123,6 +131,52 @@ public class InstanceParser
     public boolean isComplete()
     {
         return complete;
+    }
+
+    /**
+     * Finishes parsing the accumulated content and build the instance, making it ready for delivery.
+     */
+    public void finish()
+    {
+        if (complete)
+        {
+            // noop - we may need to redundantly call finish() to take care of the edge cases when the
+            // last instance in the list does not have a TAG line, and we prevent duplicate work from being done
+            // unnecessarily
+            return;
+        }
+
+        // get the instance ID and name from the TAG line, otherwise we'll get it from the INSTANCE line
+        // some instance don't have TAG lines
+
+        String line = lines.get(TAG);
+
+        if (line != null)
+        {
+            parseTag(line);
+        }
+
+        // get the public IP address from the NICASSOCIATION line
+
+        line = lines.get(NICASSOCIATION);
+
+        if (line != null)
+        {
+            parseNicAssociation(line);
+        }
+
+        line = lines.get(PRIVATEIPADDRESS);
+
+        if (line != null)
+        {
+            parsePrivateIpAddress(line);
+        }
+
+        line = lines.get(INSTANCE);
+
+        parseInstance(line);
+
+        complete = true;
     }
 
     @Override
@@ -239,40 +293,6 @@ public class InstanceParser
     // Protected -------------------------------------------------------------------------------------------------------
 
     // Private ---------------------------------------------------------------------------------------------------------
-
-    private void parseAll()
-    {
-        // get the instance ID and name from the TAG line
-
-        String line = lines.get(TAG);
-
-        if (line == null)
-        {
-            throw new IllegalStateException("no '" + TAG + "' line found");
-        }
-
-        parseTag(line);
-
-        // get the public IP address from the NICASSOCIATION line
-
-        line = lines.get(NICASSOCIATION);
-
-        if (line != null)
-        {
-            parseNicAssociation(line);
-        }
-
-        line = lines.get(PRIVATEIPADDRESS);
-
-        if (line != null)
-        {
-            parsePrivateIpAddress(line);
-        }
-
-        line = lines.get(INSTANCE);
-
-        parseInstance(line);
-    }
 
     // Inner classes ---------------------------------------------------------------------------------------------------
 }

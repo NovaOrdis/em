@@ -43,6 +43,7 @@ public class ec2_describe_instances_parser
         {
             ec2_describe_instances_parser p = new ec2_describe_instances_parser(args);
             p.parse(br);
+            log.debug("\nec-describe-instance command output:\n" + p.getRawOutput());
             p.output();
         }
         finally
@@ -57,6 +58,7 @@ public class ec2_describe_instances_parser
     private List<InstanceField> outputFields;
     private List<Filter> filters;
     private OutputFormat outputFormat;
+    private String rawOutput;
 
     // Constructors ----------------------------------------------------------------------------------------------------
 
@@ -65,6 +67,7 @@ public class ec2_describe_instances_parser
         outputFields = new ArrayList<>();
         filters = new ArrayList<>();
         parseCommandLine(args);
+        rawOutput = "";
         log.debug(this + " constructed");
     }
 
@@ -110,6 +113,11 @@ public class ec2_describe_instances_parser
         return filters;
     }
 
+    public String getRawOutput()
+    {
+        return rawOutput;
+    }
+
     @Override
     public String toString()
     {
@@ -124,6 +132,8 @@ public class ec2_describe_instances_parser
         InstanceParser instanceParser = new InstanceParser();
         while(((line = br.readLine())) != null)
         {
+            rawOutput += line + "\n";
+
             if (instances == null)
             {
                 instances = new ArrayList<>();
@@ -145,6 +155,7 @@ public class ec2_describe_instances_parser
         }
 
         // add the last instance we did not have a chance to get in the loop
+        instanceParser.finish(); // noop if already finished
         addWithFilter(instanceParser.getInstance());
     }
 
@@ -262,6 +273,7 @@ public class ec2_describe_instances_parser
 
         }
 
+        log.debug("filters accepted the instance " + instance);
         instances.add(instance);
     }
 

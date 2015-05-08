@@ -63,7 +63,7 @@ public class InstanceParserTest
             {
                 // the TAG line
                 assertTrue(ip.parse(line));
-                assertTrue(ip.isComplete());
+                assertFalse(ip.isComplete());
             }
             else if (lineCount == 9)
             {
@@ -120,7 +120,7 @@ public class InstanceParserTest
             {
                 // the TAG line
                 assertTrue(ip.parse(line));
-                assertTrue(ip.isComplete());
+                assertFalse(ip.isComplete());
             }
             else if (lineCount == 10)
             {
