@@ -53,6 +53,7 @@ function main()
     debug "name: ${name}"
 
     [ "${name/ //}" != "${name}" ] && fail "currently we can only update an instance at a time"
+    [ "${name}" = "" ] && fail "an instance name must be specified"
 
     [ -f $(dirname $0)/../overlays/${overlay} ] || fail "overlay $(dirname $0)/../overlays/${overlay} does not exist"
 

@@ -1,70 +1,5 @@
 #!/bin/bash
-#
-# Common Library
-#
-# Global variables
-#
-#       debug_off=true|false
-#
-#       dry_run=true|false
-#
-#
 
-# TODO consolidate with ec2.shlib similar function
-# By default, without doing anything, debug is turned off.
-# To turn debugging on, set debug_off=false somewhere in the upper calling layers.
-function debug
-{
-    ${debug_off} && return 0
-    echo "$1" 1>&2;
-}
-
-# TODO consolidate with ec2.shlib similar function
-function info()
-{
-    echo "$@" 1>&2;
-}
-
-# TODO consolidate with ec2.shlib similar function
-# sends the arguments at stderr and exits with 1
-function fail()
-{
-    echo "$@" 1>&2;
-    exit 1
-}
-
-
-function get-ids
-{
-    ids=$(cat /etc/hosts | grep -v localhost | grep -v "^ *$" | sed -e 's/^.* \(.*\)$/\1/')
-    echo ${ids}
-}
-
-# fails if the id does not exist
-function id-to-ip
-{
-    local id=$1
-
-    [ "${id}" = "" ] && { echo "'id' is not set" 1>&2; exit 1; }
-
-    local line
-    line=$(cat /etc/hosts | grep "^.* ${id}$")
-    line=${line%% *}
-    [ "${line}" = "" ] && { echo "id ${id} not known" 1>&2; exit 1; }
-    echo ${line}
-}
-
-# returns our eth0 address
-function get-ip-address
-{
-    local ip
-    ip=$(ifconfig eth0 | grep "inet ") || { exit 1; }
-    ip=${ip#*inet }
-    ip=${ip%% *}
-    ip=${ip#addr:}
-    [ "${ip}" = "" ] && { echo "failed to figure out the IP address" 1>&2; exit 1; }
-    echo ${ip}
-}
 
 # returns the group owner of the directory/file or fails with a return code 1
 function get-group
@@ -83,11 +18,6 @@ function get-group
 
     echo ${s} | awk '{print $4}'
 }
-
-#######################################################################################
-# Host-wide configuration
-#######################################################################################
-
 
 #
 # This is the function that links the id to ec2-host in /nfs/bin, providing for the shortcut to
@@ -111,104 +41,6 @@ function link-to-ec2-host
 # User Environment Configuration
 #######################################################################################
 
-function get-home-dir
-{
-    local user_name=$1
-    debug "setup-bashrc(user_name=$1)"
-    [ "${user_name}" = "" ] && { echo "'user_name' not specified" 1>&2; exit 1; }
-
-    local home_dir
-
-    if [ "${user_name}" = "root" ]; then
-        home_dir="/root"
-    else
-        home_dir="/home/${user_name}"
-    fi
-
-    [ -d ${home_dir} ] || { echo "home directory for user ${user_name} ${home_dir} does not exist" 1>&2; exit 1; }
-
-    echo "${home_dir}"
-}
-
-#
-# assumes the correct hostname is returned by 'hostname' so setup-hostname must be
-# run before this
-#
-function setup-bashrc
-{
-    local user_name=$1
-    debug "setup-bashrc(user_name=$1)"
-    [ "${user_name}" = "" ] && { echo "'user_name' not specified" 1>&2; exit 1; }
-
-    local hostname
-    hostname=$(hostname) || { echo "failed to execute hostname" 1>&2; exit 1; }
-
-    local cursor=">"
-    [ "${user_name}" = "root" ] && cursor="#"
-
-    local PS1_content="export PS1=\"${user_name}@${hostname}${cursor} \""
-
-    local bashrc_file="$(get-home-dir ${user_name})/.bashrc"
-
-    if ! grep -q "${PS1_content}" ${bashrc_file}; then
-        echo "" >> ${bashrc_file}
-        echo "${PS1_content}" >> ${bashrc_file}
-        echo "PS1 configured in ${bashrc_file}"
-    fi
-
-    local alias_content="alias h='history'"
-
-    if ! grep -q "${alias_content}" ${bashrc_file}; then
-        echo "" >> ${bashrc_file}
-        echo "${alias_content}" >> ${bashrc_file}
-        echo "${alias_content} configured in ${bashrc_file}"
-    fi
-
-    alias_content="alias r='sudo su -'"
-
-    if ! grep -q "${alias_content}" ${bashrc_file}; then
-        echo "${alias_content}" >> ${bashrc_file}
-        echo "${alias_content} configured in ${bashrc_file}"
-    fi
-
-    alias_content="alias cds='cd /nfs'"
-
-    if ! grep -q "${alias_content}" ${bashrc_file}; then
-        echo "${alias_content}" >> ${bashrc_file}
-        echo "${alias_content} configured in ${bashrc_file}"
-    fi
-
-    local gld_home_content="export GLD_HOME=/nfs/gld/current"
-
-    if ! grep -q "${gld_home_content}" ${bashrc_file}; then
-        echo "" >> ${bashrc_file}
-        echo "${gld_home_content}" >> ${bashrc_file}
-        echo "export PATH=\${PATH}:\${GLD_HOME}/bin" >> ${bashrc_file}
-        echo "${gld_home_content} configured in ${bashrc_file}"
-    fi
-}
-
-function update-bashrc-with-java-information
-{
-    local user=$1
-    local java_home=$2
-
-    debug "updating .bashrc with java information ..."
-
-    [ "${user}" = "" ] && { echo "'user' not provided" 1>&2; exit 1; }
-    [ "${java_home}" = "" ] && { echo "'java_home' not provided" 1>&2; exit 1; }
-    [ -d "${java_home}" ] || { echo "'java_home' ${java_home} does not exist" 1>&2; exit 1; }
-    [ -d "${java_home}/bin" ] || { echo "'java_home'/bin ${java_home}/bin does not exist" 1>&2; exit 1; }
-
-    local bashrc_file="$(get-home-dir ${user})/.bashrc"
-
-    if ! grep -q "export JAVA_HOME=${java_home}" ${bashrc_file}; then
-        echo "" >> ${bashrc_file}
-        echo "export JAVA_HOME=${java_home}" >> ${bashrc_file}
-        echo "export PATH=\${JAVA_HOME}/bin:\${PATH}" >> ${bashrc_file}
-        echo "java information configured in ${bashrc_file}"
-    fi
-}
 
 function setup-environment-private-key
 {
@@ -262,20 +94,6 @@ function setup-environment-public-key
         echo ${public_key} >> ${ssh_dir}/authorized_keys || { echo "failed to copy environment key file into ${ssh_dir}/id_rsa" 1>&2; exit 1; }
         chown ${user_name}:${user_name} ${ssh_dir}/id_rsa || exit 1
         echo "updated ${ssh_dir}/authorized_keys, added '${key_label}'"
-    fi
-}
-
-function setup-ovidiu-defaut-public-key
-{
-    local ovidiu_default_file=$1
-    [ "${ovidiu_default_file}" = "" ] && { echo "'ovidiu_default_file' not specified" 1>&2; exit 1; }
-    [ -f "${ovidiu_default_file}" ] || { echo "'ovidiu_default_file' ${ovidiu_default_file} does not exist" 1>&2; exit 1; }
-
-    local ssh_dir=$(get-home-dir ec2-user)/.ssh
-
-    if ! grep -q "ovidiu_default" ${ssh_dir}/authorized_keys; then
-        cat ${ovidiu_default_file} >> ${ssh_dir}/authorized_keys || { echo "failed to copy ${ovidiu_default_file} into ${ssh_dir}/id_rsa" 1>&2; exit 1; }
-        echo "updated ${ssh_dir}/authorized_keys, added 'ovidiu_default'"
     fi
 }
 

@@ -117,12 +117,6 @@ function main
     debug "deleting the installation key"
     rm ${temp_installation_key} || { echo "failed to remove installation key" 1>&2; exit 1; } || exit 1
 
-    #
-    # at this point, we know the burn in is a success, so register (or update the existing registration)
-    # in the environment managers's /etc/hosts
-    #
-
-    update-etc-hosts ${id} ${private_ip}
 }
 
 main $@

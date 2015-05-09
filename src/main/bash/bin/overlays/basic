@@ -29,6 +29,14 @@ is-overlay-applied && { info "the overlay was already applied"; exit 0; }
 
 set-hostname ${name} && info "hostname successfully configured" || debug "hostname already set"
 
+install-package zip
+install-package unzip
+
+setup-user-environment root
+setup-user-environment ec2-user
+
+# NFS
+
 nfs_server_name=$(get-nfs-server-name ${nfs_server_ip}) || exit 1
 if [ "${nfs_server_name}" = "" ]; then
     setup-nfs-server-identity ${nfs_server_ip} && info "NFS server identity successfully configured" || debug "NFS server identity already configured"
@@ -38,4 +46,12 @@ fi
 [ "${nfs_server_name}" = "" ] && fail "failed to get the NFS server name after the identity was set up"
 
 setup-nfs-client ${name} ${nfs_server_ip} ${nfs_server_name} && info "NFS client successfully configured" || info "NFS client already setup"
+
+# all these below require NFS
+
+install-authorized-keys
+
+
+
+
 

@@ -58,6 +58,15 @@ function warn
     return 0
 }
 
+#
+# Send a TODO message at stderr (not to interfere with function returns)
+#
+function todo
+{
+    echo "[TODO]: $@" 1>&2;
+    return 0
+}
+
 
 #
 # Send error information at stderr (but not exit)

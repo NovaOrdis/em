@@ -15,6 +15,55 @@ function is-overlay-applied()
         { debug "NSF client is correctly set"; } || \
         { debug "NSF client is not correctly set"; return 1; }
 
+    local user
+    for user in root ec2-user; do
+        grep -q "^alias h=" $(get-home ${user})/.bashrc || return 1
+        grep -q "^alias r=" $(get-home ${user})/.bashrc || return 1
+    done
+}
+
+function setup-user-environment()
+{
+    debug-arguments $@
+
+    user=$1
+    [ "${user}" = "" ] && fail "${FUNCNAME[0]}: 'user' not provided"
+
+    local cursor=">"
+    [ "${user}" = "root" ] && cursor="#"
+
+    local PS1_content="export PS1=\"${user}@$(hostname)${cursor} \""
+
+    local bashrc_file="$(get-home ${user})/.bashrc"
+
+    if ! grep -q "${PS1_content}" ${bashrc_file}; then
+        echo "" >> ${bashrc_file}
+        echo "${PS1_content}" >> ${bashrc_file}
+        info "cursor configured in ${bashrc_file}"
+    else
+        debug "cursor already configured in ~${user}/.bashrc"
+    fi
+
+    local alias="alias h='history'"
+
+    if ! grep -q "${alias}" ${bashrc_file}; then
+        echo "" >> ${bashrc_file}
+        echo "${alias}" >> ${bashrc_file}
+        info "${alias} configured in ${bashrc_file}"
+    else
+        debug "${alias} already configured in ~${user}/.bashrc"
+    fi
+
+    alias="alias r='sudo su -'"
+
+    if ! grep -q "${alias}" ${bashrc_file}; then
+        echo "" >> ${bashrc_file}
+        echo "${alias}" >> ${bashrc_file}
+        info "${alias} configured in ${bashrc_file}"
+    else
+        debug "${alias} already configured in ~${user}/.bashrc"
+    fi
+
 }
 
 #
@@ -41,4 +90,26 @@ function setup-nfs-server-identity()
     update-etc-hosts ${nfs_server_hostname} ${nfs_server_ip} ${etc_hosts} && modified=true
 
     ${modified} && return 0 || return 1
+}
+
+#
+# Install authorized keys for external users. If gets the keys from the environment's "authorized-keys" directory and
+# installs them into ec2-user's authorized_keys file
+#
+# This step requires NFS
+#
+function install-authorized-keys()
+{
+    debug-arguments $@
+
+    local env_authorized_keys_dir=$1
+    [ "${env_authorized_keys_dir}" = "" ] && env_authorized_keys_dir=/nfs/environment/authorized-keys
+    [ -d ${env_authorized_keys_dir} ] || fail "${env_authorized_keys_dir} does not exist or is not accessible"
+
+    local key_name
+    for i in $(ls ${env_authorized_keys_dir}); do
+        key_name=$(install-authorized-key ${env_authorized_keys_dir}/${i} ec2-user) && \
+            info "installed ${key_name} key into ec2-user's authorized_keys file"  || \
+            debug "${key_name} key is in ec2-user's authorized_keys already"
+    done
 }

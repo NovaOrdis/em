@@ -1,0 +1,25 @@
+#!/bin/bash
+
+lib=$(dirname $0)/../../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/overlays.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/basic.shlib; [ -f ${lib} ] && . ${lib} # the behavior we need is in the basic overlay
+
+#
+# The behavior of this overlay is also part of the basic overlay, but it exists in separation because we may need
+# to apply it repeatedly, every time we want to allow access to an external user. The procedure consists in
+# placing the user's public key in /nfs/environment/authorized-keys and running the overlay on the instances
+# we want to give the user access to:
+#
+# em overlay --overlay authorized-keys <instance-name> ...
+#
+
+process-overlay-arguments $@
+overlay-preconditions
+# we run it every time, we don't check whether is applied or not
+# is-overlay-applied
+
+install-authorized-keys
+
+
+

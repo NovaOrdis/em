@@ -15,12 +15,15 @@
 # return 0 if the pacakge was already installed by the function and 1 if the package was already installed;
 # exits on failure
 #
+# No need for external reporting, the function appropriately reports to info it it performs the installation and to
+# debug if the package is already installed
+#
 function install-package
 {
     debug-arguments $@
 
     local package_name=$1
-    [ "${package_name}" = "" ] && { echo "'package_name' not specified" 1>&2; exit 1; }
+    [ "${package_name}" = "" ] && { echo "${FUNCNAME[0]}: 'package_name' not specified" 1>&2; exit 1; }
 
     if yum -q list installed ${package_name} 2>/dev/null 1>&2; then
         debug "${package_name} already installed"
@@ -30,6 +33,7 @@ function install-package
     #
     # installing packages may take a while, so let the user know
     #
+
     info "installing package ${package_name} ..."
 
     yum -q -y install ${package_name} || fail "failed to install ${package_name}"
@@ -37,13 +41,39 @@ function install-package
     return 0
 }
 
+########################################################################################################################
+# User management functions
+########################################################################################################################
+
+#
+# The user's home directory
+#
+function get-home()
+{
+    debug-arguments $@
+
+    local user=$1
+    [ "${user}" = "" ] && fail "${FUNCNAME[0]}: 'user' not provided"
+
+    local home="/home/${user}"
+    [ "${user}" = "root" ] && home="/root"
+    [ -d ${home} ] && echo "${home}" || fail "${user}'s home directory ${home} does not exist"
+}
+
+function get-home-dir
+{
+
+    echo "${home_dir}"
+}
+
+
 
 ########################################################################################################################
 # hostname functions
 ########################################################################################################################
 
-# Given a host name and an IP address, update the system's /etc/hosts if the IP associated with the
-# host name in the file is different or the host is not mentioned.
+# Given a host name and an IP address, update the system's /etc/hosts if the IP associated with the host name in the
+# file is different or the host is not mentioned.
 #
 # return 0 if an update has been made or 1 if no update has been made because the values are already in the file
 #
@@ -144,7 +174,7 @@ function set-hostname()
     local etc_hosts=$3              # optional
     local etc_cloud_cloud_cfg=$4    # optional
 
-    [ "${name}" = "" ] && fail "'name' not specified"
+    [ "${name}" = "" ] && fail "${FUNCNAME[0]}: 'name' not specified"
     [ "${etc_sysconfig_network}" = "" ] && etc_sysconfig_network=/etc/sysconfig/network
     [ -w ${etc_sysconfig_network} ] || fail "${etc_sysconfig_network} does not exist or is not writable"
     [ "${etc_hosts}" = "" ] && etc_hosts=/etc/hosts
@@ -240,13 +270,13 @@ function setup-nfs-client()
     local nfs_server_name=$3
     local etc_fstab=$4 # optional
     [ "${etc_fstab}" = "" ] && etc_fstab=/etc/fstab
-    [ -f ${etc_fstab} ] || fail "${etc_fstab} not fournd"
+    [ -f ${etc_fstab} ] || fail "${FUNCNAME[0]}: ${etc_fstab} not fournd"
 
     local modified=false
 
-    [ "${name}" = "" ] && fail "'name' not specified"
-    [ "${nfs_server_ip}" = "" ] && fail "'nfs_server_ip' not specified"
-    [ "${nfs_server_name}" = "" ] && fail "'nfs_server_name' not specified"
+    [ "${name}" = "" ] && fail "${FUNCNAME[0]}: 'name' not specified"
+    [ "${nfs_server_ip}" = "" ] && fail "${FUNCNAME[0]}: 'nfs_server_ip' not specified"
+    [ "${nfs_server_name}" = "" ] && fail "${FUNCNAME[0]}: 'nfs_server_name' not specified"
 
     install-package nfs-utils && modified=true
 
@@ -276,4 +306,49 @@ function setup-nfs-client()
     [ ! -d /nfs/archive ] && fail "directory nfs/archive does not exist, which means NFS client installation did not work"
 
     ${modified} && return 0 || return 1
+}
+
+########################################################################################################################
+# SSH functions
+########################################################################################################################
+
+#
+# return 0 if tke file is modified and the key is installed or 1 if the key is already in the file
+#
+# echoes the key's owner at stdout
+#
+function install-authorized-key()
+{
+    debug-arguments $@
+
+    local key_file=$1
+    local user=$2
+
+    [ "${key_file}" = "" ] && fail "${FUNCNAME[0]}: 'key_file' not provided"
+    [ -f "${key_file}" ] || fail "${FUNCNAME[0]}: ${key_file} not accessible"
+    [ "${user}" = "" ] && fail "${FUNCNAME[0]}: 'user' not provided"
+    local authorized_keys_file=/home/${user}/.ssh/authorized_keys
+    [ -f ${authorized_keys_file} ] || fail "authorized key file for user ${user} ${authorized_keys_file} is not accessible"
+
+    local type
+    local key
+    local owner
+
+    type=$(cat ${key_file} | awk '{print $1}') || fail "cannot identify the type"
+    key=$(cat ${key_file} | awk '{print $2}') || fail "cannot identify the key"
+    owner=$(cat ${key_file} | awk '{print $3}') || fail "cannot identify the owner"
+
+    debug "type/owner: ${type}/${owner}"
+
+    echo "${owner}"
+
+    if grep -q "${key}" ${authorized_keys_file}; then
+        # the key is in the file already
+        return 1
+    fi
+
+    cat ${key_file} >> ${authorized_keys_file} && \
+        { debug "wrote key ${type}/${owner} into ${authorized_keys_file}"; return 0; } || \
+        fail "failed to write key ${type}/${owner} into ${authorized_keys_file}"
+
 }

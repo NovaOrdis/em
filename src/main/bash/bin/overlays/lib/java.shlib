@@ -1,2 +1,23 @@
 #!/bin/bash
 
+#function update-bashrc-with-java-information
+#{
+#    local user=$1
+#    local java_home=$2
+#
+#    debug "updating .bashrc with java information ..."
+#
+#    [ "${user}" = "" ] && { echo "'user' not provided" 1>&2; exit 1; }
+#    [ "${java_home}" = "" ] && { echo "'java_home' not provided" 1>&2; exit 1; }
+#    [ -d "${java_home}" ] || { echo "'java_home' ${java_home} does not exist" 1>&2; exit 1; }
+#    [ -d "${java_home}/bin" ] || { echo "'java_home'/bin ${java_home}/bin does not exist" 1>&2; exit 1; }
+#
+#    local bashrc_file="$(get-home-dir ${user})/.bashrc"
+#
+#    if ! grep -q "export JAVA_HOME=${java_home}" ${bashrc_file}; then
+#        echo "" >> ${bashrc_file}
+#        echo "export JAVA_HOME=${java_home}" >> ${bashrc_file}
+#        echo "export PATH=\${JAVA_HOME}/bin:\${PATH}" >> ${bashrc_file}
+#        echo "java information configured in ${bashrc_file}"
+#    fi
+#}
