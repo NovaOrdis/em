@@ -22,7 +22,7 @@ $(list-overlays)
 
 Usage:
 
-    em overlay --overlay <overlay-name> <instance-name>
+    em overlay <overlay-name> <instance-name>
 
 EOF
 exit 0
@@ -30,23 +30,23 @@ exit 0
 
 function main()
 {
-    process-common-arguments $@
-
     debug "$(basename $0) command line arguments: $@"
 
-    local mode=$(basename $0)
+    process-common-arguments $@
 
     ${help} && usage;
 
     local name
     local overlay
-    local is_overlay=false
 
     for i in ${args}; do
-        [ "${i}" = "--overlay" ] && { is_overlay=true; continue; }
-        ${is_overlay} && { is_overlay=false; overlay=${i}; continue; }
-        [ "${i:0:2}" = "--" ] && fail "unknown update option ${i}";
-        [ "${name}" = "" ] && name=${i} || name="${name} ${i}"
+        if [ "${overlay}" = "" ]; then
+            overlay=${i}
+        elif [ "${i:0:2}" = "--" ]; then
+            fail "unknown update option ${i}";
+        else
+            [ "${name}" = "" ] && name=${i} || name="${name} ${i}"
+        fi
     done
 
     debug "overlay: ${overlay}"
@@ -58,6 +58,14 @@ function main()
     [ -f $(dirname $0)/../overlays/${overlay} ] || fail "overlay $(dirname $0)/../overlays/${overlay} does not exist"
 
     info "applying overlay ${overlay} to ${name} ..."
+
+    #
+    # figure out the ssh url, catch address-related issues early to avoid creating the tar unnecessarily
+    #
+
+    local ssh_url
+    ssh_url=$(ssh-url ${name}) || exit 1
+    debug "ssh_url: ${ssh_url}"
 
     #
     # tar gz the em bits that are needed remote; we don't use zip because zip/unzip might not be installed yet
@@ -78,10 +86,6 @@ function main()
     #
     # scp em.zip and install it on the target instance
     #
-
-    local ssh_url
-    ssh_url=$(ssh-url ${name}) || exit 1
-    debug "ssh_url: ${ssh_url}"
 
     # when scping and sshing, we use the "installation" identity
     local sqp_quiet="-q"

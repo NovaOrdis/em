@@ -1,5 +1,15 @@
 #!/bin/bash
 
+#
+# aliases used both by is-overlay-applied() and setup-user-environment()
+#
+
+declare -a ALIASES
+
+ALIASES[0]="alias h='history'"
+ALIASES[1]="alias r='sudo su -'"
+ALIASES[2]="alias nfs='cd /nfs'"
+
 # return 0 if the overlay was applied successfully and there is no need to apply it, 1 otherwise
 function is-overlay-applied()
 {
@@ -17,8 +27,18 @@ function is-overlay-applied()
 
     local user
     for user in root ec2-user; do
-        grep -q "^alias h=" $(get-home ${user})/.bashrc || return 1
-        grep -q "^alias r=" $(get-home ${user})/.bashrc || return 1
+
+        local i=0
+        while [ ${i} -lt ${#ALIASES[*]} ]; do
+            local alias=${ALIASES[${i}]}
+            ((i++))
+            debug "alias: ${alias}"
+            local alias_regex
+            alias_regex=${alias%%\'*}
+            alias_regex="^${alias_regex}"
+            debug "alias regex: ${alias_regex}"
+            grep -q "${alias_regex}" $(get-home ${user})/.bashrc || { debug "alias ${alias} not in user ${user}'s .bashrc"; return 1; }
+        done
     done
 }
 
@@ -44,26 +64,20 @@ function setup-user-environment()
         debug "cursor already configured in ~${user}/.bashrc"
     fi
 
-    local alias="alias h='history'"
+    echo "" >> ${bashrc_file}
 
-    if ! grep -q "${alias}" ${bashrc_file}; then
-        echo "" >> ${bashrc_file}
-        echo "${alias}" >> ${bashrc_file}
-        info "${alias} configured in ${bashrc_file}"
-    else
-        debug "${alias} already configured in ~${user}/.bashrc"
-    fi
+    local i=0
+    while [ ${i} -lt ${#ALIASES[*]} ]; do
+        local alias=${ALIASES[${i}]}
+        ((i++))
 
-    alias="alias r='sudo su -'"
-
-    if ! grep -q "${alias}" ${bashrc_file}; then
-        echo "" >> ${bashrc_file}
-        echo "${alias}" >> ${bashrc_file}
-        info "${alias} configured in ${bashrc_file}"
-    else
-        debug "${alias} already configured in ~${user}/.bashrc"
-    fi
-
+        if ! grep -q "${alias}" ${bashrc_file}; then
+            echo "${alias}" >> ${bashrc_file}
+            info "${alias} configured in ${bashrc_file}"
+        else
+            debug "${alias} already configured in ~${user}/.bashrc"
+        fi
+    done
 }
 
 #

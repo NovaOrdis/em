@@ -116,6 +116,7 @@ function fail
 #
 function process-common-arguments
 {
+    debug-arguments $@
     args=""
 
     while [ $# -gt 0 ]; do
