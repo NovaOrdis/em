@@ -303,7 +303,15 @@ function setup-nfs-client()
 
     mount -a && debug "successfully executed mount -a"
 
-    [ ! -d /nfs/archive ] && fail "directory nfs/archive does not exist, which means NFS client installation did not work"
+    #
+    # we check NFS is functional by checking whether the environment configuration file is accessible
+    #
+
+    [ "${ENVIRONMENT_CONFIGURATION_FILE}" = "" ] && fail "the ENVIRONMENT_CONFIGURATION_FILE global variable not set, which means the overlay has not been initialized properly"
+
+    [ -f ${ENVIRONMENT_CONFIGURATION_FILE} ] && \
+        debug "we are able to access ${ENVIRONMENT_CONFIGURATION_FILE} which means NSF client is correctly set" || \
+        fail "${ENVIRONMENT_CONFIGURATION_FILE} is not accessible which means NFS client installation did not work (or the environment server is not correctly setup)"
 
     ${modified} && return 0 || return 1
 }

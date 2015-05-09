@@ -21,9 +21,15 @@ function is-overlay-applied()
 
     debug "checking whether the NFS client is correctly set ..."
 
-    [ -d /nfs/archive ] && \
-        { debug "NSF client is correctly set"; } || \
-        { debug "NSF client is not correctly set"; return 1; }
+    #
+    # we do that by checking whether the environment configuration file is accessible
+    #
+    [ "${ENVIRONMENT_CONFIGURATION_FILE}" = "" ] && \
+        fail "the ENVIRONMENT_CONFIGURATION_FILE global variable not set, which means the overlay has not been initialized properly"
+
+    [ -f ${ENVIRONMENT_CONFIGURATION_FILE} ] && \
+        debug "NSF client is correctly set" || \
+        { debug "we cannot see the environment configuration file ${ENVIRONMENT_CONFIGURATION_FILE}, most likely the NSF client is not correctly set (though it is also possible that the environment server was not correctly stood up"; return 1; }
 
     local user
     for user in root ec2-user; do

@@ -35,6 +35,10 @@ function process-overlay-arguments()
 {
     process-common-arguments $@
 
+    debug ""
+    debug "------- entering overlay '$(basename $0)':"
+    debug ""
+
     [ "${args}" = "" ] && fail "the instance name was not provided to the overlay; it should be passed as the first positional argument in the overlay command line";
 
     name="";
@@ -75,4 +79,11 @@ function overlay-preconditions()
     [ $(id -un) = "root" ] || fail "the $(basename $0) overlay is supposed to be executed as root, but it is executed as $(whoami)"
 
     [ "${name}" = "" ] && fail "the instance name was not set as global variable"
+
+    #
+    # read the bootstap configuration, this is where we find, among other things, the location of the environemnt
+    # configuration file
+    #
+    local bootstrap_conf_file=$(dirname $0)/../../etc/bootstrap.conf
+    [ -f ${bootstrap_conf_file} ] && . ${bootstrap_conf_file} || faile "bootstrap configuration file ${bootstrap_conf_file} not found"
 }

@@ -278,27 +278,4 @@ function get_java_dir
     echo ${java_dir}
 }
 
-# returns the installed java director
-function install_java
-{
-    local java_archive_name=$1
-    local archive_dir=$2
-    debug "installing java ..."
-    [ "${archive_dir}" = "" ] && { echo "'archive_dir' not provided" 1>&2; exit 1; }
-    [ -d "${archive_dir}" ] || { echo "'archive_dir' ${archive_dir} does not exist" 1>&2; exit 1; }
-
-    local java_archive_file=${archive_dir}/${java_archive_name}
-    [ -f ${java_archive_file} ] || { echo "java archive file ${java_archive_file} does not exist" 1>&2; exit 1; }
-
-    [ -h /opt/java ] && { echo "java already installed"; return 0; }
-
-    debug "extracting java from ${java_archive_file} into /opt ..."
-
-    (cd /opt; gunzip < ${java_archive_file} | tar xf -) && echo "extracted java into /opt" 1>&2 || { echo "failed to extract java" 1>&2; exit 1; }
-
-    local java_dir
-    java_dir=$(get_java_dir /opt) || exit 1
-
-    ln -s ${java_dir} /opt/java && echo "linked ${java_dir} to /opt/java" 1>&2
-}
 

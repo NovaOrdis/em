@@ -10,7 +10,7 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 #
 
 # NONE
-# $(dirname $0)/environment-hostname $@ || exit 1
+# $(dirname $0)/environment-hostname $@
 
 #
 # The first overlay do deploy, and a dependency to pretty much everything else. It includes

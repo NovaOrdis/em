@@ -32,10 +32,10 @@ EOF
 exit 0
 }
 
-function read-configuration()
+function read-bootstrap-configuration()
 {
-    local conf_file=$(dirname $0)/../etc/em.conf
-    [ -f ${conf_file} ] && . ${conf_file}
+    local bootstrap_conf_file=$(dirname $0)/../etc/bootstrap.conf
+    [ -f ${bootstrap_conf_file} ] && . ${bootstrap_conf_file} || warn "bootstrap configuration file ${bootstrap_conf_file} not found"
 }
 
 function main()
@@ -44,7 +44,7 @@ function main()
 
     [ "${args}" = "" ] && usage;
 
-    read-configuration
+    read-bootstrap-configuration
 
     #
     # the first "non-common" argument is the command

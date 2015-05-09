@@ -13,3 +13,50 @@ function list-em-commands()
         echo "    ${i}"
     done
 }
+
+########################################################################################################################
+# environment configuration tools
+########################################################################################################################
+
+environment_configuration_file_sourced=false
+
+#
+# we access environment configuration through a function because we want to be isolate the client code from
+# changes in access to it
+#
+# Always returns a non-zero-length string containing the environment configuration value at stdout. If the variable
+# is not defined or defined as an enpty string, the function fails with a human readable error message. The function
+# also fails on any error while trying to resolve the variable. TODO: refactor if empty variable values are legal
+#
+# The method performs all necessary debug logging.
+#
+# Recommended usage pattern
+#
+# local myvar
+# myvar=$(get-environment-configuration "myvar") || exit 1
+# # guaranteed non-zero-lenght value
+#
+function get-environment-configuration()
+{
+    debug-arguments $@
+
+    local env_config_var_name=$1
+    [ -z ${env_config_var_name} ] && fail "the environment configuration variable name not provided"
+
+    if ! ${environment_configuration_file_sourced}; then
+        #
+        # if ENVIRONMENT_CONFIGURATION_FILE is defined and accessible, source it to have access to the enviornment
+        # configuratiom. This only can happen if NFS is operational
+        #
+        [ -z ${ENVIRONMENT_CONFIGURATION_FILE} ] && fail "environment configuration file not defined, check your bootstrap configuration"
+        [ -f ${ENVIRONMENT_CONFIGURATION_FILE} ] || fail "environment configuration file ${ENVIRONMENT_CONFIGURATION_FILE} not accessible"
+        . ${ENVIRONMENT_CONFIGURATION_FILE} && { debug "sourced ${ENVIRONMENT_CONFIGURATION_FILE}"; } || fail "failed to source ${ENVIRONMENT_CONFIGURATION_FILE}"
+
+        environment_configuration_file_sourced=true
+    fi
+
+    local value=${!env_config_var_name}
+    debug "environment variable ${env_config_var_name} resolved to \"${value}\""
+    [ -z ${value} ] && fail "'${env_config_var_name}' environemnt configuration variable not defined in ${ENVIRONMENT_CONFIGURATION_FILE}"
+    echo "${value}"
+}

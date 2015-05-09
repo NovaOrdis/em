@@ -1,50 +1,104 @@
 #!/bin/bash
 
-#function update-bashrc-with-java-information
-#{
-#    local user=$1
-#    local java_home=$2
 #
-#    debug "updating .bashrc with java information ..."
-#
-#    [ "${user}" = "" ] && { echo "'user' not provided" 1>&2; exit 1; }
-#    [ "${java_home}" = "" ] && { echo "'java_home' not provided" 1>&2; exit 1; }
-#    [ -d "${java_home}" ] || { echo "'java_home' ${java_home} does not exist" 1>&2; exit 1; }
-#    [ -d "${java_home}/bin" ] || { echo "'java_home'/bin ${java_home}/bin does not exist" 1>&2; exit 1; }
-#
-#    local bashrc_file="$(get-home-dir ${user})/.bashrc"
-#
-#    if ! grep -q "export JAVA_HOME=${java_home}" ${bashrc_file}; then
-#        echo "" >> ${bashrc_file}
-#        echo "export JAVA_HOME=${java_home}" >> ${bashrc_file}
-#        echo "export PATH=\${JAVA_HOME}/bin:\${PATH}" >> ${bashrc_file}
-#        echo "java information configured in ${bashrc_file}"
-#    fi
-#}
-
 # return 0 if the overlay was applied successfully and there is no need to apply it, 1 otherwise
+#
+# If the function decides java was successfully installed, it exports a valid JAVA_HOME in the environment
+#
 function is-overlay-applied()
 {
     debug "checking whether java was installed ..."
 
+    if [ -h /opt/java ]; then
+        debug "link /opt/java exists, it looks like java was installed"
+        export JAVA_HOME=/opt/java
+        debug "exported JAVA_HOME=${JAVA_HOME}"
+    else
+        debug "link /opt/java does not exist"
+        return 1
+    fi
+
+    # TODO we may also want to check java version, etc.
+
     local user
     for user in root ec2-user; do
-
-        debug "checking whether ${user}'s environment was updated for java ..."
+        local bashrc_file="$(get-home ${user})/.bashrc"
+        if ! grep -q "^export JAVA_HOME=${JAVA_HOME}" ${bashrc_file}; then
+            debug "java environment not configured for user ${user}"
+            return 1
+        else
+            debug "java environment already configured for user ${user}"
+        fi
     done
 
-    return 1
+    return 0
 }
 
+#
+# Successful installation exports a valid JAVA_HOME in the environment.
+#
+# return 0 if the installation modified state or 1 if not
+#
 function install-java()
 {
     debug-arguments $@
+
+    [ -h /opt/java ] && { debug "java already installed"; return 1; }
+
+    local java_template
+    java_template=$(get-environment-configuration "java_template") || exit 1
+
+    local repository
+    repository=$(get-environment-configuration "repository") || exit 1
+
+    [ -d ${repository} ] || fail "repository directory ${repository} not accessible"
+
+    local f=${repository}/${java_template}
+    [ -f ${f} ] || fail "java template file ${f} cannot be accessed"
+
+    debug "extracting java from ${f} into /opt ..."
+
+    # capture stdout to use it in figuring out JAVA_HOME
+
+    local extraction_output
+    extraction_output=$(cd /opt; gunzip < ${f} | tar xfv -) && \
+        debug "successfully extracted ${f} into /opt" fail "failed to extract ${f} into /opt"
+
+    debug "$extraction_output}"
+    local java_dir=${extraction_output%%/*}
+    debug "java_dir: ${java_dir}"
+    java_dir="/opt/${java_dir}"
+    [ -d ${java_dir} ] || fail "java_dir ${java_dir} not a valid directory"
+    info "installed java into ${java_dir}"
+
+    local link="/opt/java"
+    ln -s ${java_dir} ${link} && info "linked ${java_dir} to ${link}" || fail "failed to link ${java_dir} to ${link}"
+
+    export JAVA_HOME=${link}
+    debug "exported JAVA_HOME=${JAVA_HOME}"
+    return 0
 }
 
+# return 0 if the function changed state or 1 if not
 function update-user-environment-for-java()
 {
     debug-arguments $@
 
     local user=$1
     [ "${user}" = "" ] && fail "${FUNCNAME[0]}: 'name' not provided"
+    [ -z ${JAVA_HOME} ] && fail "previous steps failed to export JAVA_HOME"
+    [ -d ${JAVA_HOME}/bin ] || fail "${JAVA_HOME}/bin does not exist"
+
+    local bashrc_file="$(get-home ${user})/.bashrc"
+
+    if ! grep -q "^export JAVA_HOME=${JAVA_HOME}" ${bashrc_file}; then
+        echo "" >> ${bashrc_file}
+        echo "export JAVA_HOME=${JAVA_HOME}" >> ${bashrc_file}
+        echo "export PATH=\${JAVA_HOME}/bin:\${PATH}" >> ${bashrc_file}
+        info "java environment configured for user ${user}"
+        return 0
+    else
+        info "java environment already configured for user ${user}"
+        return 1
+    fi
 }
