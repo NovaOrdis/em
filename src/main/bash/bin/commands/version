@@ -1,0 +1,17 @@
+#!/bin/bash
+
+lib=$(dirname $0)/../../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+
+function main()
+{
+    process-common-arguments $@
+
+    debug "$(basename $0) command line arguments: $@"
+
+    echo ${version}
+    echo ${release_date}
+
+
+}
+
+main $@
