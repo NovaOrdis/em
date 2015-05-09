@@ -24,7 +24,7 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 
 process-overlay-arguments $@
 overlay-preconditions
-is-overlay-applied && { info "the $(basename $0) overlay was already applied"; exit 0; }
+is-overlay-applied && { info "$(basename $0) overlay already applied"; exit 0; }
 
 set-hostname ${name} && info "hostname successfully configured" || debug "hostname already set"
 

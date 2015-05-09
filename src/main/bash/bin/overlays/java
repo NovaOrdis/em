@@ -18,7 +18,7 @@ $(dirname $0)/basic $@
 
 process-overlay-arguments $@
 overlay-preconditions
-is-overlay-applied && { info "the $(basename $0) overlay was already applied"; exit 0; }
+is-overlay-applied && { info "$(basename $0) overlay already applied"; exit 0; }
 
 install-java
 debug "post install JAVA_HOME: ${JAVA_HOME}"
