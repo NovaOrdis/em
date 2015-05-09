@@ -9,7 +9,38 @@ function list-overlays()
     excludes="lib"
     for i in ${overlays}; do
         [[ "${excludes}" =~ ${i} ]] && continue;
-
-        echo "    ${i}"
+        local dependencies=$(get-overlay-dependencies ${i} ${overlay_dir})
+        [ "${dependencies}" = "" ] && dependencies="NO DEPENDENCY" || dependencies="(depends on ${dependencies})"
+        printf "    %-20s %s\n"  "${i}" "${dependencies}"
     done
 }
+
+#
+# empty string if no dependencies are found
+#
+function get-overlay-dependencies()
+{
+    debug-arguments $@
+
+    local overlay_name=$1
+    local overlay_dir=$2
+
+    [ "${overlay_name}" = "" ] && fail "${FUNCNAME[0]}: 'overlay_name' not provided"
+    [ "${overlay_dir}" = "" ] && fail "${FUNCNAME[0]}: 'overlay_dir' not provided"
+    [ -d ${overlay_dir} ] || fail "${FUNCNAME[0]}: ${overlay_dir} not a valid directory"
+
+    #
+    # parse the overlay code looking for ^$(dirname $0)/<dependency-name> $@ ...
+    #
+
+    local f=${overlay_dir}/${overlay_name}
+
+    [ -f ${f} ] || fail "overlay file ${f} cannot be found"
+
+    local dependencies
+    dependencies=$(grep "^\$(dirname \$0)/.* \$@" ${f} | sed -e 's/^.*\/\(.*\) \$@.*$/\1/')
+    debug "dependencies: ${dependencies}"
+    # this will elliminate the new lines
+    echo ${dependencies}
+}
+

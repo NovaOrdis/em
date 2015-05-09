@@ -21,3 +21,30 @@
 #        echo "java information configured in ${bashrc_file}"
 #    fi
 #}
+
+# return 0 if the overlay was applied successfully and there is no need to apply it, 1 otherwise
+function is-overlay-applied()
+{
+    debug "checking whether java was installed ..."
+
+    local user
+    for user in root ec2-user; do
+
+        debug "checking whether ${user}'s environment was updated for java ..."
+    done
+
+    return 1
+}
+
+function install-java()
+{
+    debug-arguments $@
+}
+
+function update-user-environment-for-java()
+{
+    debug-arguments $@
+
+    local user=$1
+    [ "${user}" = "" ] && fail "${FUNCNAME[0]}: 'name' not provided"
+}

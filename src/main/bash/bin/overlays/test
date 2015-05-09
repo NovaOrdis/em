@@ -9,6 +9,7 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 #
 # dependencies
 #
+#$(dirname $0)/blah $@ || exit 1
 
 # NONE
 # $(dirname $0)/environment-hostname $@ || exit 1

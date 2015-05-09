@@ -1,1 +1,29 @@
 #!/bin/bash
+
+lib=$(dirname $0)/../../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/overlays.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
+
+#
+# dependencies
+#
+
+$(dirname $0)/basic $@ || exit 1
+
+#
+# overlay
+#
+
+process-overlay-arguments $@
+overlay-preconditions
+is-overlay-applied && { info "the $(basename $0) overlay was already applied"; exit 0; }
+
+install-java
+update-user-environment-for-java root
+update-user-environment-for-java ec2-user
+
+
+
+
+
