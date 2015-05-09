@@ -8,6 +8,7 @@ function to-ing
     local mode=$1
 
     [ "${mode}" = "terminate" ] && { echo "terminating"; return 0; }
+    [ "${mode}" = "stop" ] && { echo "stopping"; return 0; }
 
     echo "${mode}ing"
 

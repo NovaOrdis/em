@@ -1,9 +1,2 @@
 #!/bin/bash
 
-# return 0 if installed, 1 otherwise
-function installed()
-{
-    debug "checking whether java is installed already ..."
-
-    return 1
-}

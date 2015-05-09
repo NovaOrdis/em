@@ -16,6 +16,14 @@ Update an existing instance. The instance must be in "running" state for this st
 
 Currently we can only update an instance at a time. TODO: multiple parallel updates.
 
+Available Overlays:
+
+$(list-overlays)
+
+Usage:
+
+    em overlay --overlay <overlay-name> <instance-name>
+
 EOF
 exit 0
 }
@@ -48,7 +56,7 @@ function main()
 
     [ -f $(dirname $0)/../overlays/${overlay} ] || fail "overlay $(dirname $0)/../overlays/${overlay} does not exist"
 
-    info "updating ${name} by applying overlay ${overlay} ..."
+    info "applying overlay ${overlay} to ${name} ..."
 
     #
     # tar gz the em bits that are needed remote; we don't use zip because zip/unzip might not be installed yet
@@ -62,7 +70,7 @@ function main()
 
     debug "tar_root: ${tar_root}"
 
-    (cd ${tar_root}; tar cf${tar_verbose} - bin/overlays lib | gzip ${gzip_quiet} > ${gzip_file}) || fail "failed to create ${gzip_file}"
+    (cd ${tar_root}; tar cf${tar_verbose} - bin/overlays lib etc | gzip ${gzip_quiet} > ${gzip_file}) || fail "failed to create ${gzip_file}"
 
     debug "gzip file ${gzip_file} created"
 
@@ -87,7 +95,9 @@ function main()
     # execute the overlay on the target instance
     #
 
-    local remote_command="cd /tmp; [ ! -d ./em ] && mkdir em; cd em; tar xfz${tar_verbose} ../$(basename ${gzip_file}); cd ..; rm ${gzip_file}; ./em/bin/overlays/${overlay} $(serialize-common-arguments)"
+    nfs_server_ip=172.31.25.44
+
+    local remote_command="cd /tmp; [ ! -d ./em ] && mkdir em; cd em; tar xfz${tar_verbose} ../$(basename ${gzip_file}); cd ..; rm ${gzip_file}; ./em/bin/overlays/${overlay} $(serialize-common-arguments) --instance-name ${name} --nfs-server-ip ${nfs_server_ip}"
     local ssh_sudo_wrapper="ssh -i $(get-installation-identity-file) -t ${ssh_url} sudo -n bash -c \"${remote_command}\""
     debug "ssh_sudo_wrapper: ${ssh_sudo_wrapper}"
 

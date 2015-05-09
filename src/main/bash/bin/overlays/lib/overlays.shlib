@@ -4,6 +4,68 @@
 # Common overlay functionality
 #
 
+# Arguments:
+#
+# --debug|--verbose|--dry-run|--help
+#
+# instance-name
+#
+# ... (other arguments)
+#
+# Delegates processing of common options and exporting as global variables to std.shlib#process-common-arguments() and
+# extracts and exposes as global variables the common overlay arguments (for example 'name'). Then sets an "args" global
+# variable that contains the remaining parameters.
+#
+# Usage:
+#           process-overlay-arguments $@
+#
+#           # you will find verbose, debug, name global variables ...
+#
+#           for i in ${args}; do
+#               # process remaining parameters as ${i}
+#           done
+#
+# Argument Handled                     Global Variable Set                    Notes
+#
+# --instance-name <name>               export name=<name>
+#
+# --mfs-server-ip <nfs_server_ip>      export nfs_server_ip=<nfs_server_ip>
+#
+function process-overlay-arguments()
+{
+    process-common-arguments $@
+
+    [ "${args}" = "" ] && fail "the instance name was not provided to the overlay; it should be passed as the first positional argument in the overlay command line";
+
+    name="";
+    local is_name=false;
+    nfs_server_ip="";
+    local is_nfs_server_ip=false;
+    local remaining;
+    for i in ${args}; do
+        if [ "${i}" = "--instance-name" ]; then
+            is_name=true
+        elif ${is_name}; then
+            is_name=false
+            name=${i}
+        elif [ "${i}" = "--nfs-server-ip" ]; then
+            is_nfs_server_ip=true
+        elif ${is_nfs_server_ip}; then
+            is_nfs_server_ip=false
+            nfs_server_ip=${i}
+        else
+            [ "${remaining}" = "" ] && remaining=${i} || remaining="${remaining} ${i}"
+        fi
+    done
+
+    export args=${remaining}
+    export name
+    export nfs_server_ip
+    debug "${FUNCNAME[0]}.name: ${name}"
+    debug "${FUNCNAME[0]}.nfs_server_ip: ${nfs_server_ip}"
+    debug "${FUNCNAME[0]}.args: ${args}"
+}
+
 #
 # insures that the overlay preconditions are met, or fail
 #
@@ -12,4 +74,5 @@ function overlay-preconditions()
 {
     [ $(id -un) = "root" ] || fail "the $(basename $0) overlay is supposed to be executed as root, but it is executed as $(whoami)"
 
+    [ "${name}" = "" ] && fail "the instance name was not set as global variable"
 }

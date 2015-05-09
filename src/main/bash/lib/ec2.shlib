@@ -77,20 +77,25 @@ function get-installation-identity-file()
 #
 function ssh-url()
 {
-    local name=$1
+    local name_or_ip=$1
 
     debug-arguments $@
 
-    [ "${name}" = "" ] && fail "'name' not specified"
+    [ "${name_or_ip}" = "" ] && fail "'name_or_ip' not specified"
 
     local ip
 
-    if in-ec2; then
+    if echo "${name_or_ip}" | grep -q "^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]$"; then
+        # we're an IP
+        ip=${name_or_ip}
+    elif in-ec2; then
         # get the internal IP address from /etc/hosts
         fail "NOT YET IMPLEMENTED"
     else
         # get the public IP address from /etc/hosts
-        ip=$(resolve-ip ${name}) || fail "failed to resolve IP for ${name}"
+        ip=$(resolve-ip ${name}) || { exit 1; }
+
+        [ "${ip}" = "" ] && fail "cannot find '${name}' in /etc/hosts"
     fi
 
     local user=ec2-user

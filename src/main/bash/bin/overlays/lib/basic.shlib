@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# return 0 if the overlay was applied successfully and there is no need to apply it, 1 otherwise
+function is-overlay-applied()
+{
+    debug "checking whether the hostname is correctly set ..."
+
+    [ "$(hostname)" = "${name}" ] && \
+        { debug "hostname is correctly set to $(hostname)"; } || \
+        { debug "hostname is not correctly set"; return 1; }
+
+    debug "checking whether the NFS client is correctly set ..."
+
+    [ -d /nfs/archive ] && \
+        { debug "NSF client is correctly set"; } || \
+        { debug "NSF client is not correctly set"; return 1; }
+
+}
+
+#
+# return 0 if the identity is set up by the fucntion, 1 if the identity was already configured and exits on failure
+#
+function setup-nfs-server-identity()
+{
+    debug-arguments $@
+
+    local nfs_server_ip=$1
+    local etc_hosts=$2
+    [ "${nfs_server_ip}" = "" ] && fail "${FUNCNAME[0]}: 'name' not set"
+    [ "${etc_hosts}" = "" ] && etc_hosts=/etc/hosts
+
+    local modified=false
+
+    # ssh into the NFS server and get the hostname
+    local environment_identity=$(dirname $0)/../../etc/environment-identity
+    [ -f ${environment_identity} ] || fail "environment identity file ${environment_identity} not found or not readable"
+    nfs_server_hostname=$(ssh -i ${environment_identity} ec2-user@${nfs_server_ip} "hostname") || fail "failed to ssh into ec2-user@${nfs_server_ip}"
+    debug "nfs_server_hostname: ${nfs_server_hostname}"
+
+    # update /etc/hosts with the NFS server name/IP address
+    update-etc-hosts ${nfs_server_hostname} ${nfs_server_ip} ${etc_hosts} && modified=true
+
+    ${modified} && return 0 || return 1
+}

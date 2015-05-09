@@ -8,14 +8,46 @@
 #
 
 ########################################################################################################################
-# /etc/hosts functions
+# Package Installations
 ########################################################################################################################
 
+#
+# return 0 if the pacakge was already installed by the function and 1 if the package was already installed;
+# exits on failure
+#
+function install-package
+{
+    debug-arguments $@
+
+    local package_name=$1
+    [ "${package_name}" = "" ] && { echo "'package_name' not specified" 1>&2; exit 1; }
+
+    if yum -q list installed ${package_name} 2>/dev/null 1>&2; then
+        debug "${package_name} already installed"
+        return 1
+    fi
+
+    #
+    # installing packages may take a while, so let the user know
+    #
+    info "installing package ${package_name} ..."
+
+    yum -q -y install ${package_name} || fail "failed to install ${package_name}"
+    debug "${package_name} installed"
+    return 0
+}
+
+
+########################################################################################################################
+# hostname functions
+########################################################################################################################
 
 # Given a host name and an IP address, update the system's /etc/hosts if the IP associated with the
 # host name in the file is different or the host is not mentioned.
 #
 # return 0 if an update has been made or 1 if no update has been made because the values are already in the file
+#
+# TODO add tests if I need to change it
 #
 function update-etc-hosts()
 {
@@ -30,10 +62,11 @@ function update-etc-hosts()
     echo ${ip} | grep -q "^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*$" || fail "${FUNCNAME[0]}: ${ip} not an IP address"
     [ "${etc_hosts}" = "" ] && etc_hosts=/etc/hosts
 
-    [ -w ${etc_hosts} ] || fail "current user cannot write ${etc_hosts}"
+    [ -w ${etc_hosts} ] || fail "${etc_hosts} does not exist or is not writable"
 
     local occurences
     occurences=$(cat ${etc_hosts} | grep "^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]* *${name}$" | wc -l)
+    debug "${occurences} occurence(s) of ${name} in ${etc_hosts}"
 
     if [ ${occurences} -gt 1 ]; then
         fail "${etc_hosts} contains more than one '${name}' occurences"
@@ -41,11 +74,11 @@ function update-etc-hosts()
         # host name exists
         local tmp=$(unique-file)
         sed -e 's/^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]* *'"${name}"'$/'"${ip} ${name}"'/' ${etc_hosts} > ${tmp}
-        diff ${etc_hosts} ${tmp} > /dev/null && { rm ${tmp}; return 1; } # no update, content already in file, return
-        move ${tmp} ${etc_hosts}
+        diff ${etc_hosts} ${tmp} > /dev/null && { rm ${tmp}; debug "${ip} ${name} already in ${etc_hosts}"; return 1; } # no update, content already in file, return
+        move ${tmp} ${etc_hosts} && debug "modified ${etc_hosts} to resolve ${name} to ${ip}"
     else
         # host name does not exist in the file, append it at the end
-        echo "${ip} ${name}" >> ${etc_hosts} || fail "failed to append to ${etc_hosts}"
+        echo "${ip} ${name}" >> ${etc_hosts} && debug "updated ${etc_hosts} to resolve ${name} to ${ip}" || fail "failed to append to ${etc_hosts}"
     fi
 
     return 0
@@ -55,8 +88,12 @@ function update-etc-hosts()
 # Read the IP associated with the given hostname in /etc/hosts and return it. Return empty string if the hostname
 # is not found.
 #
+# read only
+#
 function resolve-ip
 {
+    debug-arguments $@
+
     local name=$1
     local etc_hosts=$2 # optional, for testing
 
@@ -64,11 +101,179 @@ function resolve-ip
     [ "${etc_hosts}" = "" ] && etc_hosts=/etc/hosts
 
     local ip
-    ip=$(cat /etc/hosts | grep "^.* ${name}$") || fail "failed to look up IP address for ${name} in /etc/hosts"
+    ip=$(cat ${etc_hosts} | grep "^.* ${name}$")
     ip=${ip% *}
     echo ${ip}
 }
 
-########################################################################################################################
 #
+# Read the name(s) associated with the given IP in /etc/hosts and return it. Return empty string if the IP is not found.
+#
+# read only
+#
+function resolve-name
+{
+    debug-arguments $@
+
+    local ip=$1
+    local etc_hosts=$2 # optional, for testing
+
+    [ "${ip}" = "" ] && fail "${FUNCNAME[0]}: 'ip' not specified"
+    [ "${etc_hosts}" = "" ] && etc_hosts=/etc/hosts
+
+    local ip
+    ip=$(cat ${etc_hosts} | grep "^${ip} *.*$")
+    debug "line: ${ip}"
+    ip=${ip%% *}
+    echo ${ip}
+}
+
+#
+# Performs the necessary steps to set the hostname
+#
+# idempotent
+#
+# return 0 if configuration was modified , 1 if nothing was changed (possibly because the host was set) or fails on errors
+#
+function set-hostname()
+{
+    debug-arguments $@
+
+    local name=$1
+    local etc_sysconfig_network=$2  # optional
+    local etc_hosts=$3              # optional
+    local etc_cloud_cloud_cfg=$4    # optional
+
+    [ "${name}" = "" ] && fail "'name' not specified"
+    [ "${etc_sysconfig_network}" = "" ] && etc_sysconfig_network=/etc/sysconfig/network
+    [ -w ${etc_sysconfig_network} ] || fail "${etc_sysconfig_network} does not exist or is not writable"
+    [ "${etc_hosts}" = "" ] && etc_hosts=/etc/hosts
+    [ -w ${etc_hosts} ] || fail "${etc_hosts} does not exist or is not writable"
+    [ "${etc_cloud_cloud_cfg}" = "" ] && etc_cloud_cloud_cfg=/etc/cloud/cloud.cfg
+    [ -w ${etc_cloud_cloud_cfg} ] || fail "${etc_cloud_cloud_cfg} does not exist or is not writable"
+
+    local modified=false
+
+    if ! grep -q "^HOSTNAME=${name}\.localdomain *$" ${etc_sysconfig_network}; then
+        echo "HOSTNAME=${name}.localdomain" >> ${etc_sysconfig_network} && debug "added HOSTNAME=${name}.localdomain to ${etc_sysconfig_network}"
+        modified=true
+    fi
+
+    local eth0_ip
+    eth0_ip=$(get-primary-ip) || exit 1
+
+    update-etc-hosts "${name}" "${eth0_ip}" ${etc_hosts} && modified=true
+    update-etc-hosts "${name}.localdomain" "${eth0_ip}" ${etc_hosts} && modified=true
+
+    if [ "$(uname -s)" = "Linux" ]; then
+        hostname ${name} && debug "executed hostname ${name}" || fail "failed to execute hostname ${name}"
+    fi
+
+    if [ -x /bin/hostnamectl ]; then
+        hostnamectl set-hostname ${name} && debug "executed hostnamectl set-hostname ${name}" || fail "failed to execute hostnamectl set-hostname ${name}"
+    fi
+
+    remove-line "^ - set_hostname *$" ${etc_cloud_cloud_cfg} && { modified=true; debug "removed set_hostname from ${etc_cloud_cloud_cfg}"; }
+    remove-line "^ - update_hostname *$" ${etc_cloud_cloud_cfg} && { modified=true; debug "removed update_hostname from ${etc_cloud_cloud_cfg}"; }
+    remove-line "^ - update_etc_hosts *$" ${etc_cloud_cloud_cfg} && { modified=true; debug "removed update_etc_hosts from ${etc_cloud_cloud_cfg}"; }
+
+    ${modified} && return 0 || return 1
+}
+
 ########################################################################################################################
+# network functions
+########################################################################################################################
+
+#
+# Usually the IP address associated with eth0
+#
+# fails if it cannot get the address
+#
+function get-primary-ip()
+{
+    local ip
+    local kernel_name="$(uname -s)"
+
+    if [ "${kernel_name}" = "Darwin" ]; then
+        ip=$(/sbin/ifconfig -a | grep "inet " | grep -v "127.0.0.1" | awk '{print $2}') || fail "failed to obtain a non-local IP address"
+    elif [ "${kernel_name}" = "Linux" ]; then
+        ip=$(/sbin/ifconfig eth0 | awk '/inet / {print $2}') || fail "failed to obtain the IP address from eth0"
+    else
+        fail "${FUNCNAME[0]}() NOT YET IMPLEMENTED for ${kernel_name}"
+    fi
+
+    [ "${ip}" = "" ] && fail "failed to obtain a non-empty address for primary interface"
+
+    echo ${ip}
+}
+
+########################################################################################################################
+# NSF functions
+########################################################################################################################
+
+# returns empty string if not found or if the name is not present in /etc/hosts
+function get-nfs-server-name()
+{
+    debug-arguments $@
+
+    local nfs_server_ip=$1
+    [ "${nfs_server_ip}" = "" ] && fail "${FUNCNAME[0]}: 'nfs_server_ip' not provided"
+
+    local etc_hosts=$2 # optional
+    [ "${etc_hosts}" = "" ] && etc_fstab=/etc/hosts
+    [ -f ${etc_hosts} ] || fail "${etc_hosts} not fournd"
+    nfs_server_name=$(resolve-name ${nfs_server_ip} ${etc_hosts}) || fail "failed to resolve ${nfs_server_ip} in ${etc_hosts}"
+    debug "nfs_server_name: ${nfs_server_ip}"
+    echo "${nfs_server_name}"
+}
+
+#
+# returns 0 if NFS client was installed and configured by the function, 1 if was already installed and configured and
+# exit on failure
+#
+function setup-nfs-client()
+{
+    debug-arguments $@
+
+    local name=$1
+    local nfs_server_ip=$2
+    local nfs_server_name=$3
+    local etc_fstab=$4 # optional
+    [ "${etc_fstab}" = "" ] && etc_fstab=/etc/fstab
+    [ -f ${etc_fstab} ] || fail "${etc_fstab} not fournd"
+
+    local modified=false
+
+    [ "${name}" = "" ] && fail "'name' not specified"
+    [ "${nfs_server_ip}" = "" ] && fail "'nfs_server_ip' not specified"
+    [ "${nfs_server_name}" = "" ] && fail "'nfs_server_name' not specified"
+
+    install-package nfs-utils && modified=true
+
+    local mount_point=/nfs
+    if [ -d ${mount_point} ]; then
+        debug "mount point ${mount_point} already exists"
+    else
+        mkdir -p ${mount_point} && info "created NFS mount point ${mount_point}" || fail "failed to create mount point ${mount_point}"
+        modified=true
+    fi
+
+    local line
+    line=$(grep "/data[ \t]*/nfs" ${etc_fstab})
+    debug "mount line: ${line}"
+    if [ "${line}" != "" ]; then
+        # already setup
+        local etc_fstab_nfs_server_name=${line%%:*}
+        [ "${etc_fstab_nfs_server_name}" = "${nfs_server_name}" ] && \\
+            fail "the name of the file server already configured in ${etc_fstab} (${etc_fstab_nfs_server_name}) is different from the server we're about to configure (${nfs_server_name})"
+    else
+        # needs setting up
+        echo "${nfs_server_name}:/data /nfs nfs _netdev,bg 0 0" >> ${etc_fstab} && modified=true || fail "failed to update  ${etc_fstab}"
+    fi
+
+    mount -a && debug "successfully executed mount -a"
+
+    [ ! -d /nfs/archive ] && fail "directory nfs/archive does not exist, which means NFS client installation did not work"
+
+    ${modified} && return 0 || return 1
+}

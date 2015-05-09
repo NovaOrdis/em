@@ -15,11 +15,14 @@ export help=false
 function debug
 {
     ${verbose} && echo "$@" 1>&2;
+    return 0
 }
 
 function debug-arguments
 {
     ${verbose} && echo "${FUNCNAME[1]}($@)" 1>&2;
+    return 0
+
 }
 
 #function debug_args()
@@ -43,7 +46,18 @@ function debug-arguments
 function info
 {
     echo "$@" 1>&2;
+    return 0
 }
+
+#
+# Send a warning at stderr (not to interfere with function returns)
+#
+function warn
+{
+    echo "[warning]: $@" 1>&2;
+    return 0
+}
+
 
 #
 # Send error information at stderr (but not exit)
@@ -51,6 +65,8 @@ function info
 function error
 {
     echo "[error]: $@" 1>&2;
+    return 0
+
 }
 
 #
@@ -203,6 +219,10 @@ function unique-file()
     echo "/tmp/em-"`date +'%y%m%d%H%M%S'`"${RANDOM}"
 }
 
+########################################################################################################################
+# File editing and manipulation
+########################################################################################################################
+
 #
 # move <source-file> <destination-file>
 #
@@ -220,7 +240,39 @@ function move()
     [ "${dest}" = "" ] && fail "no destination file specified"
     [ -f ${dest} ] || fail "no such file ${dest}"
 
-
     diff ${src} ${dest} > /dev/null && fail "files ${src} and ${dest} are identical, no replacement was made"
     mv ${src} ${dest} || fail "failed to move ${src} over ${dest}"
+}
+
+#
+# Removes a regular expression from the file (but not the line)
+#
+# Return 0 if something was actually removed or 1 if the file was not changed
+#
+#function remove-regex()
+#{
+#    local regex=$1
+#    local file=$2
+#
+#    local tmp=$(unique-file)
+#    sed -e 's/'"${regex}"'//' ${file} > ${tmp} || fail "fail to execute sed -e 's/${regex}//' on ${file}"
+#    diff ${file} ${tmp} > /dev/null && { rm ${tmp}; return 1; } # identical files, no replacement made
+#    mv ${tmp} ${file} && return 0 || fail "failed to restore ${file}"
+#}
+
+#
+# Removes the whole line if it contains the regular expression
+#
+# Return 0 if something was actually removed or 1 if the file was not changed
+#
+# TODO add tests if I need to change it
+#
+function remove-line()
+{
+    local regex=$1
+    local file=$2
+    local tmp=$(unique-file)
+    sed -e '/'"${regex}"'/d' ${file} > ${tmp} || fail "fail to execute sed -e '/'${regex}'/d' on ${file}"
+    diff ${file} ${tmp} > /dev/null && { rm ${tmp}; debug "${regex} not in ${file}"; return 1; } # identical files, no replacement made
+    mv ${tmp} ${file} && return 0 || fail "failed to restore ${file}"
 }

@@ -37,7 +37,7 @@ function main()
         local name=${i%%:*}
         local ip=${i##*:}
         debug "running instance: ${name}/${ip}"
-        update-etc-hosts ${name} ${ip} && info "${name} address has been updated in /etc/hosts" || debug "/etc/hosts not updated"
+        update-etc-hosts ${name} ${ip} && info "${name} address has been updated to ${ip} in /etc/hosts" || debug "/etc/hosts not updated"
         make-login-shortcut-link $(config LOGIN_SHORTCUT_LINK_DIR) ${name} && info "shortcut link ${name} created" || debug "no shortcut link created"
     done
 }

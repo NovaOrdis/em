@@ -7,7 +7,7 @@ function usage()
 {
 cat <<EOF
 
-Create an Amazon EC2 intance.
+Create a set of Amazon EC2 intance.
 
 Usage:
 

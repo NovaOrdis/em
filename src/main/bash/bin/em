@@ -25,6 +25,8 @@ To get inline help for individual commands, run:
 
     em <command> --help
 
+Questions or comments: ovidiu@novaordis.com
+
 EOF
 
 exit 0

@@ -88,51 +88,6 @@ function get-group
 # Host-wide configuration
 #######################################################################################
 
-function setup-hostname
-{
-    local id=$1
-
-    debug "setup-hostname(id=$1)"
-
-    if [ "$(hostname)" = "${id}" ]; then
-        # nothing to do, return
-        debug "host name already set as ${id}"
-        return 0
-    fi
-
-    hostname ${id} || { echo "failed to set hostname to ${id}" 1>&2; exit 1; }
-
-    echo "${id}" > /etc/hostname && \
-        echo "setup hostname as '${id}'" || \
-        { echo "failed to write ${id} into /etc/hostname" 1>&2; exit 1; }
-
-    [ "${id}" = "$(hostname)" ] || { echo "even if ${id} was written into /etc/hostname, the hostname command returs $(hostname)" 1>&2; exit 1; }
-}
-
-#
-# if the <target_ip> <id> is already declared, don't do anything. Register it otherwise.
-#
-function update-etc-hosts
-{
-    local id=$1
-    local target_ip=$2
-    [ "${id}" = "" ] && { echo "'id' not specified" 1>&2; exit 1; }
-    [ "${target_ip}" = "" ] && { echo "'target_ip' not specified" 1>&2; exit 1; }
-
-    if ! grep -q "^${target_ip} *${id}$" /etc/hosts; then
-        # first check to see if the id was registered under a different ip
-        if grep -q " *${id}$" /etc/hosts; then
-            cat /etc/hosts | sed -e 's/^.* *'${id}'$/'${target_ip}' '${id}'/' > /tmp/.txt
-            mv /tmp/.txt /etc/hosts || { echo "failed to restore /etc/hosts" 1>&2; exit 1; }
-            echo "updated /etc/hosts, replaced ${id} definition with  ${target_ip}"
-        else
-            echo "${target_ip} ${id}" >> /etc/hosts && \
-                echo "updated /etc/hosts, added ${target_ip} ${id}" || \
-                echo "failed to update /etc/hosts, most likely not sufficient persmissions" 1>&2;
-
-        fi
-    fi
-}
 
 #
 # This is the function that links the id to ec2-host in /nfs/bin, providing for the shortcut to
@@ -446,48 +401,8 @@ function mount-main-storage
 
 
 #######################################################################################
-# Package Installations
-#######################################################################################
-
-function install-package
-{
-    local package_name=$1
-    [ "${package_name}" = "" ] && { echo "'package_name' not specified" 1>&2; exit 1; }
-
-    if ! yum -q list installed ${package_name} 2>/dev/null 1>&2; then
-        yum -q -y install ${package_name} || { echo "failed to install ${package_name}" 1>&2; exit 1; }
-        echo "installed ${package_name}"
-    fi
-}
-
-
-#######################################################################################
 # NFS Installation
 #######################################################################################
-
-function setup-nfs-client
-{
-    debug "setting up the NFS client ..."
-
-    install-package nfs-utils
-
-    debug "nfs-utils installed"
-
-    if [ -d /nfs ]; then
-        echo "mount point /nfs already exists"
-    else
-        mkdir -p /nfs && echo "created mount point /nfs" || exit 1
-    fi
-
-    if ! grep -q "f01:/data" /etc/fstab; then
-        echo "f01:/data /nfs nfs _netdev,bg 0 0" >> /etc/fstab || { echo "failed to update /etc/fstab" 1>&2; exit 1; }
-        echo "updated /etc/fstab"
-    fi
-
-    mount -a
-
-    [ ! -d /nfs/archive ] && { echo "directory nfs/archive does not exist, which means NFS client installation did not work" 1>&2; exit 1; }
-}
 
 function setup-nfs-server
 {

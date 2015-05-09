@@ -1,0 +1,15 @@
+#!/bin/bash
+
+function list-overlays()
+{
+    local overlay_dir=$(dirname $0)/../overlays
+    [ -d ${overlay_dir} ] || fail "overlay directory ${overlay_dir} not found"
+
+    overlays=$(ls ${overlay_dir})
+    excludes="lib"
+    for i in ${overlays}; do
+        [[ "${excludes}" =~ ${i} ]] && continue;
+
+        echo "    ${i}"
+    done
+}
