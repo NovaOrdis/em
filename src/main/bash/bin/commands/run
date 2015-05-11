@@ -68,11 +68,13 @@ function main()
 
         invoke-instance ${names[${i}]} "${remote_command}" > ${stdout_file} 2> ${stderr_file} &
 
-        info "connection to instance ${names[${i}]} executing in the background"
+        debug "connection to instance ${names[${i}]} executing in the background"
 
         #ssh_pids[$i]=$!
 
     done
+
+    info "all connections initiated"
 
     debug "waiting for all ssh child processes to end ..."
     wait
@@ -89,6 +91,9 @@ function main()
         echo ""
 
         cat ${stderr_file}
+
+        echo ""
+        echo "------------------------------------------------------------------------------------------------------------------------------"
 
         echo ""
         echo "${names[${i}]} STDOUT -------------------------------------------------------------------------------------------------------------------"
