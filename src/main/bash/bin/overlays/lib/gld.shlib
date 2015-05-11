@@ -1,2 +1,35 @@
 #!/bin/bash
 
+#
+# return 0 if the overlay was applied successfully and there is no need to apply it, 1 otherwise
+#
+function is-overlay-applied()
+{
+    return 1;
+}
+
+function update-user-environment-for-gld()
+{
+    debug-arguments $@
+
+    local user=$1
+    [ "${user}" = "" ] && fail "${FUNCNAME[0]}: 'name' not provided"
+
+    GLD_HOME=/nfs/opt/gld/current
+
+    [ -d ${GLD_HOME}/bin ] || fail "${GLD_HOME}/bin does not exist"
+
+    local bashrc_file="$(get-home ${user})/.bashrc"
+
+    if ! grep -q "^export GLD_HOME=${GLD_HOME}" ${bashrc_file}; then
+        echo "" >> ${bashrc_file}
+        echo "export GLD_HOME=${GLD_HOME}" >> ${bashrc_file}
+        echo "export PATH=\${GLD_HOME}/bin:\${PATH}" >> ${bashrc_file}
+        info "GLD environment configured for user ${user}"
+        return 0
+    else
+        info "GLD environment already configured for user ${user}"
+        return 1
+    fi
+
+}

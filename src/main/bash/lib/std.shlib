@@ -18,6 +18,14 @@ function debug
     return 0
 }
 
+#
+# Send error information at stderr and exit
+#
+function fail
+{
+    echo "[error]: $@" 1>&2 && exit 1
+}
+
 function debug-arguments
 {
     ${verbose} && echo "${FUNCNAME[1]}($@)" 1>&2;
@@ -76,14 +84,6 @@ function error
     echo "[error]: $@" 1>&2;
     return 0
 
-}
-
-#
-# Send error information at stderr and exit
-#
-function fail
-{
-    error "$@" && exit 1
 }
 
 #
@@ -226,7 +226,15 @@ ${M2}/log4j/log4j/1.2.16/log4j-1.2.16.jar"
 #
 function unique-file()
 {
-    echo "/tmp/em-"`date +'%y%m%d%H%M%S'`"${RANDOM}"
+    local dir=$1    # optional
+    local prefix=$2 # optional
+
+    [ -z ${dir} ] && dir=/tmp
+    [ -d ${dir} ] || fail "directory ${dir} does not exist"
+
+    [ -z ${prefix} ] && prefix="em"
+
+    echo "${dir}/${prefix}-"`date +'%y%m%d%H%M%S'`"${RANDOM}"
 }
 
 ########################################################################################################################

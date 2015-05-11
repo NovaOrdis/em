@@ -1,0 +1,133 @@
+#!/bin/bash
+
+lib=$(dirname $0)/../../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../../lib/ec2.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/lifecycle.shlib; [ -f ${lib} ] && . ${lib}
+
+help=false
+mode="start"
+args=""
+
+
+function usage()
+{
+cat <<EOF
+
+Runs an arbitrary command, in parallel, on all environment instances specified as argument:
+
+Usage:
+
+    em run <instances> -- <command>
+
+Example:
+
+    em run p01 p02 -- gld version
+
+EOF
+exit 0
+}
+
+function main()
+{
+    process-common-arguments $@
+
+    debug "$(basename $0) command line arguments: $@"
+
+    ${help} && usage;
+
+    declare -a names
+    declare -a stdout_files
+    declare -a stderr_files
+    declare -a sh_pids
+
+    debug "args: ${args}"
+
+    local i=0
+    local add_to_remote_command=false
+    local remote_command=""
+    for n in ${args}; do
+        [ "${n}" = "--" ] && { add_to_remote_command=true; continue; }
+        ${add_to_remote_command} && \
+        { [ -z ${remote_command} ] && remote_command=${n} || remote_command="${remote_command} ${n}"; continue; }
+        names[${i}]=${n}
+        (( i++ ))
+    done
+
+    debug "remote_command: ${remote_command}"
+
+    # run ssh for each instance in background and store the stout/stderr in arrays
+    for (( i=0; i<${#names[@]}; i++ )); do
+
+        stdout_file=$(unique-file . "${names[${i}]}-stdout")
+        stderr_file=$(unique-file . "${names[${i}]}-stderr")
+
+        stdout_files[${i}]=${stdout_file}
+        stderr_files[${i}]=${stderr_file}
+
+        info "connecting to instance ${names[${i}]} ..."
+
+        invoke-instance ${names[${i}]} "${remote_command}" > ${stdout_file} 2> ${stderr_file} &
+
+        info "connection to instance ${names[${i}]} executing in the background"
+
+        #ssh_pids[$i]=$!
+
+    done
+
+    debug "waiting for all ssh child processes to end ..."
+    wait
+    debug "all ssh child processes finishded"
+
+    debug "displaying stdout and stderr content from remote processes ..."
+
+    for (( i=0; i<${#names[@]}; i++ )); do
+        local stdout_file=${stdout_files[${i}]}
+        local stderr_file=${stderr_files[${i}]}
+
+        echo ""
+        echo "${names[${i}]} STDERR -------------------------------------------------------------------------------------------------------------------"
+        echo ""
+
+        cat ${stderr_file}
+
+        echo ""
+        echo "${names[${i}]} STDOUT -------------------------------------------------------------------------------------------------------------------"
+        echo ""
+
+        cat ${stdout_file}
+
+        echo ""
+        echo "------------------------------------------------------------------------------------------------------------------------------"
+
+        rm ${stdout_file} && debug "removed ${stdout_file}"
+        rm ${stderr_file} && debug "removed ${stderr_file}"
+    done
+}
+
+function invoke-instance()
+{
+    debug-arguments $@
+
+    local name=$1
+    local remote_command=$2
+
+    local ssh_options="-t -t"
+
+    local command="ssh ${ssh_options} ec2-user@${name} ${remote_command}"
+
+    debug "command: ${command}"
+
+    local stdout
+
+    stdout=$(${command})
+
+    echo ${stdout}
+    retcode=$?
+
+    [ ${retcode} -eq 255 ] && echo "FAIL: SSH ERROR on ${name}"
+    [ ${retcode} -ne 0 ] && echo "FAIL: COMMAND ERROR on ${name}"
+}
+
+main $@
+
+
