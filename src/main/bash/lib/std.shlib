@@ -94,6 +94,10 @@ function error
 # Note that if you need to convert exported global variables back into common command line arguments (to pass them
 # over ssh, for example), use 'serialize-common-arguments' function.
 #
+# The function will remove only the first occurence of --verbose, -v, --debug because lower layers may need the second
+# occurence - as a command parameter of its own, for example
+#
+#
 # Usage:
 #           process-common-options $@
 #
@@ -120,12 +124,14 @@ function process-common-arguments
     args=""
 
     while [ $# -gt 0 ]; do
-        if [ "$1" = "--verbose" -o "$1" = "-v" ]; then
+        if ! ${verbose} && [ "$1" = "--verbose" -o "$1" = "-v" ]; then
             export verbose=true
-        elif [ "$1" = "--debug" ]; then
+            # the second --verbose|-v will go into arguments
+        elif ! ${verbose} && [ "$1" = "--debug" ]; then
             export verbose=true
             # we need to set this to pass it to sub-processes as argument
             export debug=true
+            # the second --debug will go into arguments
         elif [ "$1" = "--dry-run" ]; then
             export dry_run=true
         elif [ "$1" = "--help" ]; then
