@@ -46,9 +46,11 @@ function main()
     local add_to_remote_command=false
     local remote_command=""
     for n in ${args}; do
+        if ${add_to_remote_command}; then
+            remote_command="${remote_command} ${n}";
+            continue;
+        fi
         [ "${n}" = "--" ] && { add_to_remote_command=true; continue; }
-        ${add_to_remote_command} && \
-        { [ -z ${remote_command} ] && remote_command=${n} || remote_command="${remote_command} ${n}"; continue; }
         names[${i}]=${n}
         (( i++ ))
     done
@@ -74,7 +76,8 @@ function main()
 
     done
 
-    info "all connections initiated"
+    info ""
+    info "all connections initiated, waiting for remote processes to exit ..."
 
     debug "waiting for all ssh child processes to end ..."
     wait
