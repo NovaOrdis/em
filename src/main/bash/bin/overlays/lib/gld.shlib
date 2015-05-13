@@ -15,7 +15,7 @@ function update-user-environment-for-gld()
     local user=$1
     [ "${user}" = "" ] && fail "${FUNCNAME[0]}: 'name' not provided"
 
-    GLD_HOME=/nfs/opt/gld/current
+    GLD_HOME=/nfs/opt/gld
 
     [ -d ${GLD_HOME}/bin ] || fail "${GLD_HOME}/bin does not exist"
 

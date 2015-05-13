@@ -23,7 +23,7 @@ $(list-em-commands)
 
 To get inline help for individual commands, run:
 
-    em <command> --help
+    em <command> -h|--help
 
 Questions or comments: ovidiu@novaordis.com
 

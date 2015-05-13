@@ -108,7 +108,6 @@ function error
 # Option Handled       Global Variable Set      Notes
 #
 # --verbose            export verbose=true
-#
 # -v                   export verbose=true
 #
 # --debug              export verbose=true      This should be used when we want to debug the process with a debugger
@@ -117,6 +116,7 @@ function error
 # --dry-run            export dry_run=true
 #
 # --help               export help=true
+# -h                   export help=true
 #
 function process-common-arguments
 {
@@ -134,7 +134,7 @@ function process-common-arguments
             # the second --debug will go into arguments
         elif [ "$1" = "--dry-run" ]; then
             export dry_run=true
-        elif [ "$1" = "--help" ]; then
+        elif [ "$1" = "-h" -o "$1" = "--help" ]; then
             export help=true
         else
             [ "${args}" = "" ] && args=$1 || args="${args} $1"
