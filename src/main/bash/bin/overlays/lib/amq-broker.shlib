@@ -379,7 +379,16 @@ function update-etc-hosts-with-other-brokers()
 
     for b in ${brokers}; do
         [ "${b}" = "${name}" ] && continue;
-        local ip="172.31.0.0"
-        update-etc-hosts ${b} ${ip}
+        local ip=$(get-private-ip ${b}) || fail "failed the get IP address for ${b}"
+        if [ -z "${ip}" ]; then
+            warn "host name ${b} not known to the enviornment, make sure to update /etc/host on ${name} with its IP address after it is created"
+        else
+            update-etc-hosts ${b} ${ip} && info "/etc/hosts updated with ${b}(${ip})" || debug "${b}(${ip}) already in /etc/hosts"
+        fi
     done
+}
+
+function configure-amq-to-start-at-boot()
+{
+    warn "configure-amq-to-start-at-boot(): NOT YET IMPLEMENTED"
 }

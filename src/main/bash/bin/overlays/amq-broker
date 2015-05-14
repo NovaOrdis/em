@@ -2,9 +2,23 @@
 
 lib=$(dirname $0)/../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/ec2.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/overlays.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
+
+#
+# configuration TODO: this must go somewhere else
+#
+
+brokers="b01 b02"
+java_min_mem=756m # ex: 1g or 515m
+java_max_mem=756m # ex: 1g or 515m
+memory_usage_limit="900 mb" # ex: "900 mb" or "5 gb"
+temp_usage_limit="900 mb" # ex: "900 mb" or "3 gb"
+general_purpose_connector_port=61616
+network_bridge_port=60000
+log_maxFileSize=100MB # ex: 100MB
 
 #
 # dependencies
@@ -20,16 +34,6 @@ process-overlay-arguments $@
 overlay-preconditions
 is-overlay-applied && { info "$(basename $0) overlay already applied"; exit 0; }
 
-brokers="b03 b04"
-
-java_min_mem=756m # ex: 1g or 515m
-java_max_mem=756m # ex: 1g or 515m
-memory_usage_limit="900 mb" # ex: "900 mb" or "5 gb"
-temp_usage_limit="900 mb" # ex: "900 mb" or "3 gb"
-general_purpose_connector_port=61616
-network_bridge_port=60000
-log_maxFileSize=100MB # ex: 100MB
-
 install-amq-broker
 configure-amq-security
 configure-amq-broker-name
@@ -39,14 +43,10 @@ configure-amq-network-connectors
 configure-amq-persistence
 configure-amq-logging
 configure-amq-permissions
-
+update-etc-hosts-with-other-brokers "${brokers}"
 update-user-environment-for-amq root
 update-user-environment-for-amq ec2-user
-
-update-etc-hosts-with-other-brokers "${brokers}"
-
-
-
+configure-amq-to-start-at-boot
 
 exit 0
 

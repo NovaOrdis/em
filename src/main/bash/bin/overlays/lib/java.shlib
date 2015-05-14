@@ -56,10 +56,10 @@ function install-java()
     local f=${repository}/${java_template}
     [ -f ${f} ] || fail "java template file ${f} cannot be accessed"
 
+    info "installing java ..."
     debug "extracting java from ${f} into /opt ..."
 
     # capture stdout to use it in figuring out JAVA_HOME
-
     local extraction_output
     extraction_output=$(cd /opt; gunzip < ${f} | tar xfv -) && \
         debug "successfully extracted ${f} into /opt" || fail "failed to extract ${f} into /opt"

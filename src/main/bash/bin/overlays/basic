@@ -26,7 +26,7 @@ process-overlay-arguments $@
 overlay-preconditions
 is-overlay-applied && { info "$(basename $0) overlay already applied"; exit 0; }
 
-set-hostname ${name} && info "hostname successfully configured" || debug "hostname already set"
+set-hostname ${name} && info "hostname successfully set to ${name}" || debug "hostname ${name} already set"
 
 install-package zip
 install-package unzip

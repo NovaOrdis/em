@@ -2,7 +2,9 @@
 
 lib=$(dirname $0)/../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/ec2.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/overlays.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/amq-broker.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 
 #
@@ -25,6 +27,8 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 
 process-overlay-arguments $@
 overlay-preconditions
+
+update-etc-hosts-with-other-brokers b01-REMOVE-WHEN-NEW-CLUSTER-WORKS
 
 
 

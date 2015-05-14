@@ -28,6 +28,22 @@ import java.util.StringTokenizer;
  *  grep_instances [filter] --list|--table <output-format>
  * </pre>
  *
+ * where:
+ *
+ * 'filter' is:
+ *
+ *          InstanceField.literal=value1|value2|...
+ *
+ * output-format:
+ *
+ *          InstanceField.literal:InstanceField.literal:...
+ *
+ * Details about the output format available here:
+ *
+ * @see com.novaordis.em.ec2.output.Output
+ *
+ * @see com.novaordis.em.ec2.model.InstanceField
+ *
  * @author <a href="mailto:ovidiu@novaordis.com">Ovidiu Feodorov</a>
  *
  * Copyright 2015 Nova Ordis LLC

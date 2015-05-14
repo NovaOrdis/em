@@ -33,21 +33,6 @@ function debug-arguments
 
 }
 
-#function debug_args()
-#{
-#    if [ "${debug}" = "" ] || ! ${debug}; then return; fi
-#
-#    effective_user=`get_user_name` || exit 1
-#
-#    echo -n "$0 ${effective_user}@${FUNCNAME[1]}(" 1>&2;
-#    while [ $# -gt 0 ]; do
-#        [ "$1" = "" ] && echo -n "\"\"" 1>&2 || echo -n $1 1>&2
-#        shift
-#        [ $# -gt 0 ] && echo -n ", " 1>&2
-#    done
-#    echo ")" 1>&2;
-#}
-
 #
 # Send info at stderr (not to interfere with function returns)
 #
@@ -74,7 +59,6 @@ function todo
     echo "[TODO]: $@" 1>&2;
     return 0
 }
-
 
 #
 # Send error information at stderr (but not exit)
@@ -205,22 +189,37 @@ function jw()
 
     local etc_dir
     local em_jar_dir
+    local log4j_jar_dir
+
+    #
+    # TODO this logic needs reviewing - and also coordinated with the one from overlay#main()
+    #
 
     if [ "${EM_HOME}" != "" ]; then
+
         etc_dir=${EM_HOME}/etc
+
+        # first we assume we're in the development enviornment and look at the target directory, then look in the
+        # standard location
         em_jar_dir=${EM_HOME}/../../../target
+        log4j_jar_dir=${M2}/log4j/log4j/1.2.16
+
+        if [ ! -d ${em_jar_dir} ]; then
+            debug "the em jar directory ${em_jar_dir} not found, it looks like we're not in a develoment environment, trying \${EM_HOME}/lib ..."
+            em_jar_dir=${EM_HOME}/lib
+            log4j_jar_dir=${em_jar_dir}
+        fi
      else
         etc_dir=$(dirname $0)/../../etc
         em_jar_dir=$(dirname $0)/../../../../../target
+        log4j_jar_dir=${M2}/log4j/log4j/1.2.16
     fi
 
     [ -d ${etc_dir} ] || fail "the em etc directory ${etc_dir} does not seem to be accessible"
-    [ -d ${em_jar_dir} ] || fail "the em jar directory ${em_jar_dir} does not seem to be accessible"
+    [ -d ${em_jar_dir} ] || fail "the em jar directory ${em_jar_dir} not found"
+    [ -d ${log4j_jar_dir} ] || fail "the em log4j directory ${log4j_jar_dir} not found"
 
-    local classpath="\
-${em_jar_dir}/em-1.0-SNAPSHOT.jar:\
-${etc_dir}:\
-${M2}/log4j/log4j/1.2.16/log4j-1.2.16.jar"
+    local classpath="${em_jar_dir}/em-1.0-SNAPSHOT.jar:${etc_dir}:${log4j_jar_dir}/log4j-1.2.16.jar"
 
     ${debug} && jvm_debug_args="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5006"
 

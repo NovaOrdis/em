@@ -45,6 +45,9 @@ function process-overlay-arguments()
     local is_name=false;
     nfs_server_ip="";
     local is_nfs_server_ip=false;
+    local is_aws_access_key=false;
+    local is_aws_secret_key=false;
+    local is_ec2_url=false;
     local remaining;
     for i in ${args}; do
         if [ "${i}" = "--instance-name" ]; then
@@ -57,6 +60,27 @@ function process-overlay-arguments()
         elif ${is_nfs_server_ip}; then
             is_nfs_server_ip=false
             nfs_server_ip=${i}
+        elif [ "${i}" = "--aws-access-key" ]; then
+            # set the AWS access key in the overlay's environment, in case we need to run ec2-api-tools
+            is_aws_access_key=true
+        elif ${is_aws_access_key}; then
+            is_aws_access_key=false
+            export AWS_ACCESS_KEY=${i}
+            debug "exported AWS_ACCESS_KEY ${AWS_ACCESS_KEY}"
+        elif [ "${i}" = "--aws-secret-key" ]; then
+            # set the AWS secret key in the overlay's environment, in case we need to run ec2-api-tools
+            is_aws_secret_key=true
+        elif ${is_aws_secret_key}; then
+            is_aws_secret_key=false
+            export AWS_SECRET_KEY=${i}
+            debug "exported AWS_SECRET_KEY ***"
+        elif [ "${i}" = "--ec2-url" ]; then
+            # set the EC2_URL in the overlay's environment, in case we need to run ec2-api-tools
+            is_ec2_url=true
+        elif ${is_ec2_url}; then
+            is_ec2_url=false
+            export EC2_URL=${i}
+            debug "exported EC2_URL ${EC2_URL}"
         else
             [ "${remaining}" = "" ] && remaining=${i} || remaining="${remaining} ${i}"
         fi
@@ -79,6 +103,12 @@ function overlay-preconditions()
     [ $(id -un) = "root" ] || fail "the $(basename $0) overlay is supposed to be executed as root, but it is executed as $(whoami)"
 
     [ "${name}" = "" ] && fail "the instance name was not set as global variable"
+
+    #
+    # set up our environment
+    #
+
+    [ -f /root/.bashrc ] && . /root/.bashrc
 
     #
     # read the bootstap configuration, this is where we find, among other things, the location of the environemnt
