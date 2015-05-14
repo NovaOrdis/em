@@ -11,11 +11,13 @@ Create a set of Amazon EC2 instances.
 
 Usage:
 
-    em create [options] <instance-name> [instance-name ...]
+    em create [--dry-run] [options] <instance-name> [instance-name ...]
+
+Note that --dry-run applies.
 
 Options:
 
-
+$(list-create-options)
 
 EOF
 exit 0
@@ -28,6 +30,9 @@ function main()
     debug "$(basename $0) command line arguments: $@"
 
     ${help} && usage;
+
+    # extract known instance configuration options and leave everyting else behind as 'args'
+    process-create-command-line-options ${args}
 
     [ "${args}" = "" ] && fail "specify the instance name"
     [ "${args/ //}" != "${args}" ] && fail "currently we only support creation of an instance at a time"
@@ -42,17 +47,29 @@ function main()
     # create the instance
     #
 
-    new_instance_id=$(ec2-run-instances ami-4dbf9e7d \
-        --instance-count 1 \
-        --key installation_access \
-        --group sg-bb3222de \
-        --instance-type t2.micro \
-        --availability-zone us-west-2b \
-        --tenancy default \
-        --block-device-mapping /dev/sda1=:10 \
-        --subnet subnet-53993c24 \
-        --instance-initiated-shutdown-behavior stop \
-        --associate-public-ip-address true | jw ec2.grep_instances --list id) || fail "instance creation failed"
+    ec2_run_instance_command="\
+ec2-run-instances \
+$(handle-ec2-run-instances-option-ami_id) \
+--instance-count 1 \
+--key $(handle-ec2-run-instances-option-key) \
+--group $(handle-ec2-run-instances-option-group) \
+--instance-type $(handle-ec2-run-instances-option-instance-type) \
+--availability-zone $(handle-ec2-run-instances-option-availability-zone) \
+--tenancy $(handle-ec2-run-instances-option-tenancy) \
+--subnet $(handle-ec2-run-instances-option-subnet) \
+--instance-initiated-shutdown-behavior $(handle-ec2-run-instances-option-instance-initiated-shutdown-behavior) \
+--associate-public-ip-address $(handle-ec2-run-instances-option-associate-public-ip-address) \
+--block-device-mapping $(get-block-device-mapping) \
+"
+    debug "ec2-run-instances command:"
+    debug "${ec2_run_instance_command}"
+
+    if ${dry_run}; then
+        dry-run "new_instance_id=\$(${ec2_run_instance_command} | jw ec2.grep_instances --list id)"
+        new_instance_id="i-XXXXXXXX"
+    else
+        new_instance_id=$(${ec2_run_instance_command} | jw ec2.grep_instances --list id) || fail "instance creation failed"
+    fi
 
     [ "${new_instance_id}" = "" ] && fail "we could not detect the new instance id"
 
@@ -60,7 +77,11 @@ function main()
     # set the Name TAG
     #
 
-    ec2-create-tags ${new_instance_id} --tag Name=${name} || fail "the instance ${new_instance_id} was created but failed to set tag Name=${name}"
+    if ${dry_run}; then
+        dry-run "ec2-create-tags ${new_instance_id} --tag Name=${name}"
+    else
+        ec2-create-tags ${new_instance_id} --tag Name=${name} || fail "the instance ${new_instance_id} was created but failed to set tag Name=${name}"
+    fi
 
     info "instance ${name} created, the instance id is ${new_instance_id}"
 

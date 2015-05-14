@@ -1,0 +1,246 @@
+#!/bin/bash
+
+#
+# used by em --help create
+#
+function list-create-options()
+{
+    typeset -F | while read line; do
+        ! echo ${line} | grep -q "^declare -f handle-ec2-run-instances-option-" && continue;
+        option_name=${line##*option-}
+        echo "  --${option_name}: $(handle-ec2-run-instances-option-${option_name} --help)"
+        echo ""
+    done
+}
+
+#
+# Extacts valid create options (as described by em create --help) and leave everything else behind by setting an
+# "args" global variable that contains the remaining parameters, so you can use that.
+#
+function process-create-command-line-options()
+{
+    debug-arguments $@
+
+    args=""
+    while [ ! -z $1 ]; do
+        if [ ${1:0:2} = "--" ]; then
+            local option_name=${1:2}
+            debug "option_name: ${option_name}"
+
+            # figure out whether there's a corresponding function
+            local function_name="handle-ec2-run-instances-option-${option_name}"
+            debug "function_name: ${function_name}"
+
+            if ! typeset -F | grep -q "^declare -f ${function_name}$"; then
+                # function does not exist
+                fail "--${option_name} not a valid 'create' option. Run 'em create --help' for a list of valid options."
+            fi
+
+            debug "function '${function_name}' exists, figuring out its argument ..."
+            shift
+            [ -z $1 ] && fail "--${option_name} must be followed by an option value"
+            [ "${1:0:2}" = "--" ] && fail "--${option_name} must be followed by an option value but we got '$1' instead"
+            local function_argument=$1
+            debug "function_argument: '${function_argument}'"
+            ${function_name} ${function_argument}
+        else
+            [ -z ${args} ] && args=$1 || args="${args} $1"
+        fi
+        shift
+    done
+
+    export args
+}
+
+########################################################################################################################
+# These options have a direct ec2-run-instances correspondent. Example --ami_id or --availability-zone
+########################################################################################################################
+
+#
+# In order to expose in-line documentation on ec2 instance creation options, name the functions
+# using the following pattern:
+#
+#       function handle-ec2-run-instances-option-<option_name>()
+#       {
+#         ...
+#       }
+#
+
+create_option_ami_id="ami-4dbf9e7d"
+function handle-ec2-run-instances-option-ami_id()
+{
+    debug-arguments $@
+    if [ "$1" = "--help" ]; then
+cat <<EOF
+the ID of the AMI, which you can get by calling ec2-describe-images. Default '${create_option_ami_id}'.
+EOF
+    return 0
+fi
+    [ ! -z $1 ] && { create_option_ami_id=$1; debug "set create_option_ami_id to '${create_option_ami_id}'"; return 0; }
+    echo ${create_option_ami_id}
+}
+
+
+
+create_option_key="installation_access"
+function handle-ec2-run-instances-option-key()
+{
+    debug-arguments $@
+    if [ "$1" = "--help" ]; then
+cat <<EOF
+the name of the key pair registered with Amazon EC2 that will give you access to instance after creation.
+    Default '${create_option_key}'.
+EOF
+    return 0
+fi
+    [ ! -z $1 ] && { create_option_key=$1; debug "set create_option_key to '${create_option_key}'"; return 0; }
+    echo ${create_option_key}
+}
+
+
+
+create_option_group="sg-bb3222de"
+function handle-ec2-run-instances-option-group()
+{
+    debug-arguments $@
+    if [ "$1" = "--help" ]; then
+cat <<EOF
+a security group ID. Default '${create_option_group}'.
+EOF
+    return 0
+fi
+    [ ! -z $1 ] && { create_option_group=$1; debug "set create_option_group to '${create_option_group}'"; return 0; }
+    echo ${create_option_group}
+}
+
+
+
+create_option_instance_type="t2.micro"
+function handle-ec2-run-instances-option-instance-type()
+{
+    debug-arguments $@
+    if [ "$1" = "--help" ]; then
+cat <<EOF
+the instance type. For more information, see
+    http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-types.html. Default '${create_option_instance_type}'.
+EOF
+    return 0
+fi
+    [ ! -z $1 ] && { create_option_instance_type=$1; debug "set create_option_instance_type to '${create_option_instance_type}'"; return 0; }
+    echo ${create_option_instance_type}
+}
+
+
+
+create_option_availability_zone="us-west-2b"
+function handle-ec2-run-instances-option-availability-zone()
+{
+    debug-arguments $@
+    if [ "$1" = "--help" ]; then
+cat <<EOF
+the Availability Zone for the instance. Default '${create_option_availability_zone}'.
+EOF
+    return 0
+fi
+    [ ! -z $1 ] && { create_option_availability_zone=$1; debug "set create_option_availability_zone to '${create_option_availability_zone}'"; return 0; }
+    echo ${create_option_availability_zone}
+}
+
+
+
+create_option_tenancy="default"
+function handle-ec2-run-instances-option-tenancy()
+{
+    debug-arguments $@
+    if [ "$1" = "--help" ]; then
+cat <<EOF
+the tenancy of the instance. An instance with a tenancy of dedicated runs on single-tenant hardware
+    and can only be launched into a VPC. Default '${create_option_tenancy}'.
+EOF
+    return 0
+fi
+    [ ! -z $1 ] && { create_option_tenancy=$1; debug "set create_option_tenancy to '${create_option_tenancy}'"; return 0; }
+    echo ${create_option_tenancy}
+}
+
+
+
+create_option_subnet="subnet-53993c24"
+function handle-ec2-run-instances-option-subnet()
+{
+    debug-arguments $@
+    if [ "$1" = "--help" ]; then
+cat <<EOF
+the ID of the subnet to launch the instance into. Default '${create_option_subnet}'.
+EOF
+    return 0
+fi
+    [ ! -z $1 ] && { create_option_subnet=$1; debug "set create_option_subnet to '${create_option_subnet}'"; return 0; }
+    echo ${create_option_subnet}
+}
+
+
+
+create_option_instance_initiated_shutdown_behavior="stop"
+function handle-ec2-run-instances-option-instance-initiated-shutdown-behavior()
+{
+    debug-arguments $@
+    if [ "$1" = "--help" ]; then
+cat <<EOF
+indicates whether an instance stops or terminates when you initiate
+    shutdown from the instance (using the operating system command for system shutdown). Default '${create_option_instance_initiated_shutdown_behavior}'.
+EOF
+    return 0
+fi
+    [ ! -z $1 ] && { create_option_instance_initiated_shutdown_behavior=$1; debug "set create_option_instance_initiated_shutdown_behavior to '${create_option_instance_initiated_shutdown_behavior}'"; return 0; }
+    echo ${create_option_instance_initiated_shutdown_behavior}
+}
+
+
+
+create_option_associate_public_ip_address="true"
+function handle-ec2-run-instances-option-associate-public-ip-address()
+{
+    debug-arguments $@
+    if [ "$1" = "--help" ]; then
+cat <<EOF
+indicates whether to assign a public IP address to an instance. Default '${create_option_associate_public_ip_address}'.
+EOF
+    return 0
+fi
+    [ ! -z $1 ] && { create_option_associate_public_ip_address=$1; debug "set create_option_associate_public_ip_address to '${create_option_associate_public_ip_address}'"; return 0; }
+    echo ${create_option_associate_public_ip_address}
+}
+
+########################################################################################################################
+# These options do not have a direct ec2-run-instances correspondent, but aggregate into larger ec2-run-instances
+# options.
+########################################################################################################################
+
+create_option_storage_size_gb=10
+function handle-ec2-run-instances-option-storage-size()
+{
+    debug-arguments $@
+    if [ "$1" = "--help" ]; then
+cat <<EOF
+the main storage volume size, in GB. Default '${create_option_storage_size_gb}'.
+EOF
+    return 0
+fi
+    [ ! -z $1 ] && { create_option_storage_size_gb=$1; debug "set create_option_storage_size_gb to '${create_option_storage_size_gb}'"; return 0; }
+    echo ${create_option_storage_size_gb}
+}
+
+########################################################################################################################
+# Aggregated ec2-run-instances options. These values are NOT specified directly in the command line.
+########################################################################################################################
+
+function get-block-device-mapping()
+{
+    debug-arguments $@
+    local block_device_mapping="/dev/sda1=:"
+
+    block_device_mapping="${block_device_mapping}"$(handle-ec2-run-instances-option-storage-size)
+
+    echo ${block_device_mapping=}
+}

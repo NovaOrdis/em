@@ -83,9 +83,16 @@ function error
 {
     echo "[error]: $@" 1>&2;
     return 0
-
 }
 
+#
+# displays the arguments at stderr as [dry-run]. Does NOT exit.
+#
+function dry-run
+{
+    echo "[dry-run]: $@" 1>&2;
+    return 0
+}
 #
 # Process common options setting and exporting global variables (so these values are passed to sub-shells). There is no
 # way (or I don't know of any way) to modify the caller's positional parameters as to remove the parameters processed

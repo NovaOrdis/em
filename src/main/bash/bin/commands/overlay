@@ -79,7 +79,7 @@ function main()
 
     debug "tar_root: ${tar_root}"
 
-    (cd ${tar_root}; tar cf${tar_verbose} - bin/overlays lib etc | gzip ${gzip_quiet} > ${gzip_file}) || fail "failed to create ${gzip_file}"
+    (cd ${tar_root}; tar cf${tar_verbose} - bin/overlays bin/lib etc | gzip ${gzip_quiet} > ${gzip_file}) || fail "failed to create ${gzip_file}"
 
     debug "gzip file ${gzip_file} created"
 
