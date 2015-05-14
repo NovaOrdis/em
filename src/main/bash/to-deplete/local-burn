@@ -25,20 +25,6 @@ function main
 
     link-to-ec2-host ${id} /nfs/bin
 
-    install_java ${java_archive_file} /nfs/archive
-
-    for user in ${users}; do
-        update-bashrc-with-java-information ${user} /opt/java
-    done
-
-    if [ "${amq_archive_file}" != "" ]; then
-        # load the amq library
-        [ -f $(dirname $0)/amq.shlib ] && . $(dirname $0)/amq.shlib || \
-            { echo "we need to install A-MQ but we did not find the A-MQ library $(dirname $0)/amq.shlib " 1>&2; exit 1; }
-
-        install-amq ${id} ${amq_archive_file}
-    fi
-
     if [ "${eap_archive_file}" != "" ]; then
         # load the eap library
         [ -f $(dirname $0)/eap.shlib ] && . $(dirname $0)/eap.shlib || \

@@ -10,7 +10,7 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 # dependencies
 #
 
-$(dirname $0)/basic $@
+$(dirname $0)/java $@
 
 #
 # overlay
@@ -20,12 +20,36 @@ process-overlay-arguments $@
 overlay-preconditions
 is-overlay-applied && { info "$(basename $0) overlay already applied"; exit 0; }
 
-install-java
-debug "post install JAVA_HOME: ${JAVA_HOME}"
-update-user-environment-for-java root
-update-user-environment-for-java ec2-user
+brokers="b03 b04"
+
+java_min_mem=756m # ex: 1g or 515m
+java_max_mem=756m # ex: 1g or 515m
+memory_usage_limit="900 mb" # ex: "900 mb" or "5 gb"
+temp_usage_limit="900 mb" # ex: "900 mb" or "3 gb"
+general_purpose_connector_port=61616
+network_bridge_port=60000
+log_maxFileSize=100MB # ex: 100MB
+
+install-amq-broker
+configure-amq-security
+configure-amq-broker-name
+size-amq-broker
+configure-amq-transport-connectors
+configure-amq-network-connectors
+configure-amq-persistence
+configure-amq-logging
+configure-amq-permissions
+
+update-user-environment-for-amq root
+update-user-environment-for-amq ec2-user
+
+update-etc-hosts-with-other-brokers "${brokers}"
+
+
+
 
 exit 0
+
 
 
 

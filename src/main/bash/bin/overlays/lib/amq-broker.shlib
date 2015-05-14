@@ -1,0 +1,385 @@
+#!/bin/bash
+
+#
+# return 0 if the overlay was applied successfully and there is no need to apply it, 1 otherwise
+#
+function is-overlay-applied()
+{
+    return 1;
+}
+
+#
+# Successful installation exports a valid AMQ_HOME in the environment.
+#
+# return 0 if the installation modified state or 1 if not
+#
+function install-amq-broker()
+{
+    debug-arguments $@
+
+    local amq_template
+    local repository
+    amq_template=$(get-environment-configuration "amq_template") || exit 1
+    repository=$(get-environment-configuration "repository") || exit 1
+    [ -d ${repository} ] || fail "repository directory ${repository} not accessible"
+    local amq_template_file=${repository}/${amq_template}
+    [ -f ${amq_template_file} ] || fail "AMQ template file ${amq_template_file} cannot be accessed"
+
+    if [ -h /opt/amq ]; then
+        debug "AMQ already installed"
+        export AMQ_HOME=/opt/amq
+        return 1;
+    fi
+
+    local unzip_quiet="-q"
+    ${verbose} && unzip_quiet=""
+
+    info "extracting ${amq_template_file} into /opt ..."
+    (cd /opt; unzip ${unzip_quiet} ${amq_template_file}) && info "extracted ${amq_template_file} into /opt" || fail "failed to extract ${amq_template_file} into /opt"
+
+    local dir_name
+    dir_name=$(unzip -l ${amq_template_file} | grep -v Archive | grep -v Length | grep -v "\-\-\-" | head -1 | awk '{print $4}') || fail "failed to read directory name from zip archive"
+    [ -z "${dir_name}" ] && fail "read empty directory name from zip archive"
+    dir_name="/opt/${dir_name}"
+    debug "dir_name: ${dir_name}"
+    [ -d ${dir_name} ] || fail "${dir_name} not a directory"
+
+    (cd /opt; ln -s $(basename ${dir_name}) amq) && info "linked $(basename ${dir_name}) to /opt/amq" || fail "failed to link $(basename ${dir_name}) to /opt/amq"
+
+    [ ! -d /opt/amq/data/log ] && \
+        { mkdir /opt/amq/data/log && info "created log directory /opt/amq/data/log" || fail "failed to create log directory /opt/amq/data/log"; }
+
+    export AMQ_HOME=/opt/amq
+    debug "exported AMQ_HOME=${AMQ_HOME}"
+    return 0
+}
+
+function configure-amq-security()
+{
+    debug-arguments $@
+
+    [ -z "${AMQ_HOME}" ] && fail "AMQ_HOME not set"
+    [ -h "${AMQ_HOME}" ] || fail "AMQ_HOME ${AMQ_HOME} not a valid link"
+    [ -d "${AMQ_HOME}/bin" ] || fail "AMQ_HOME/bin ${AMQ_HOME}/bin not a valid directory"
+
+    local modified=false
+
+    local f=${AMQ_HOME}/etc/users.properties
+
+    if grep -q "^#admin=admin,admin$" ${f}; then
+        local tmp=$(unique-file)
+        sed -e 's/^#admin=admin,admin$/admin=admin123,admin/' ${f} > ${tmp} || fail "failed to sed ${f}"
+        move ${tmp} ${f} && info "configured admin credentials in ${f}"
+        chgrp ec2-user ${f} && info "chgrp ec2-user ${f}" || fail "failed to chgrp ec2-user ${f}"
+        chmod g+w ${f} && info "chmod g+w ${f}" || fail "failed to chmod g+w ${f}"
+        modified=true
+    else
+        debug "security already configured in ${f}"
+    fi
+
+    f=${AMQ_HOME}/etc/system.properties
+
+    if grep -q "^#activemq.jmx.user=admin$" ${f}; then
+        local tmp=$(unique-file)
+        sed -e 's/^#activemq.jmx.user=admin$/activemq.jmx.user=admin/' \
+            -e 's/^#activemq.jmx.password=.*$/activemq.jmx.password=admin123/' ${f} > ${tmp} || fail "failed to sed ${f}"
+        move ${tmp} ${f} && info "configured admin credentials in ${f}"
+        chgrp ec2-user ${f} && info "chgrp ec2-user ${f}" || fail "failed to chgrp ec2-user ${f}"
+        chmod g+w ${f} && info "chmod g+w ${f}" || fail "failed to chmod g+w ${f}"
+        modified=true
+    else
+        debug "security already configured in ${f}"
+    fi
+
+    ${modified} && return 0 || return 1
+}
+
+function configure-amq-broker-name()
+{
+    debug-arguments $@
+
+    [ -z "${AMQ_HOME}" ] && fail "AMQ_HOME not set"
+    [ -h "${AMQ_HOME}" ] || fail "AMQ_HOME ${AMQ_HOME} not a valid link"
+    [ -d "${AMQ_HOME}/bin" ] || fail "AMQ_HOME/bin ${AMQ_HOME}/bin not a valid directory"
+
+    local broker_id=$(hostname)
+    debug "broker_id: ${broker_id}"
+
+    local f=${AMQ_HOME}/etc/org.fusesource.mq.fabric.server-default.cfg
+
+    if ! grep -q "^broker-name=amq$" ${f}; then
+        debug "broker id already configured in ${f}"
+        return 1
+    fi
+
+    local tmp=$(unique-file)
+    sed -e 's/^broker-name=amq$/broker-name='${broker_id}'/' ${f} > ${tmp} || fail "failed to sed ${f}"
+    move ${tmp} ${f} && info "set broker id to ${broker_id} in ${f}"
+    chgrp ec2-user ${f} && info "chgrp ec2-user ${f}" || fail "failed to chgrp ec2-user ${f}"
+    chmod g+w ${f} && info "chmod g+w ${f}" || fail "failed to chmod g+w ${f}"
+    return 0
+}
+
+function size-amq-broker()
+{
+    debug-arguments $@
+
+    [ -z "${AMQ_HOME}" ] && fail "AMQ_HOME not set"
+    [ -h "${AMQ_HOME}" ] || fail "AMQ_HOME ${AMQ_HOME} not a valid link"
+    [ -d "${AMQ_HOME}/bin" ] || fail "AMQ_HOME/bin ${AMQ_HOME}/bin not a valid directory"
+
+    [ -z "${java_min_mem}" ] && fail "'java_min_mem' not defined"
+    [ -z "${java_max_mem}" ] && fail "'java_max_mem' not defined"
+
+    local f=${AMQ_HOME}/bin/setenv
+
+    if grep -q "^ *JAVA_MIN_MEM=${java_min_mem}" ${f}; then
+        debug "JAVA_MIN_MEM=${java_min_mem} already configured in ${f}"
+    else
+        local tmp=$(unique-file)
+        sed -e 's/^\( *JAVA_MIN_MEM=\).*$/\1'${java_min_mem}'/' ${f} > ${tmp} || fail "failed to sed ${f}"
+        move ${tmp} ${f} && info "set JAVA_MIN_MEM=${java_min_mem} in ${f}"
+    fi
+
+    if grep -q "^ *JAVA_MAX_MEM=${java_max_mem}" ${f}; then
+        debug "JAVA_MAX_MEM=${java_max_mem} already configured in ${f}"
+    else
+        local tmp=$(unique-file)
+        sed -e 's/^\( *JAVA_MAX_MEM=\).*$/\1'${java_max_mem}'/' ${f} > ${tmp} || fail "failed to sed ${f}"
+        move ${tmp} ${f} && info "set JAVA_MAX_MEM=${java_max_mem} in ${f}"
+    fi
+
+    f=${AMQ_HOME}/etc/activemq.xml
+
+    if grep -q "policyEntry queue.* memoryLimit=" ${f}; then
+        local tmp=$(unique-file)
+        sed -e 's/\(^.*\) memoryLimit.*$/\1>/' ${f} > ${tmp} || fail "failed to sed ${f}"
+        move ${tmp} ${f} && info "removed memory limit on queues in ${f}"
+    else
+        debug "producer flow control memory limit already removed from ${f}"
+    fi
+
+    [ -z "${memory_usage_limit}" ] && fail "'memory_usage_limit' not defined"
+
+    if grep -q "<memoryUsage limit=\"${memory_usage_limit}\"/>" ${f}; then
+        debug "memoryUsage limit already set to ${memory_usage_limit} in ${f}"
+    else
+        local tmp=$(unique-file)
+        sed -e 's/\(^.*memoryUsage limit=\).*$/\1\"'"${memory_usage_limit}"'\"\/>/' ${f} > ${tmp} || fail "failed to sed ${f}"
+        move ${tmp} ${f} && info "set memoryUsage to ${memory_usage_limit} in ${f}"
+    fi
+
+    [ -z "${temp_usage_limit}" ] && fail "'temp_usage_limit' not defined"
+
+    if grep -q "<tempUsage limit=\"${temp_usage_limit}\"/>" ${f}; then
+        debug "tempUsage limit already set to ${temp_usage_limit} in ${f}"
+    else
+        local tmp=$(unique-file)
+        sed -e 's/\(^.*tempUsage limit=\).*$/\1\"'"${temp_usage_limit}"'\"\/>/' ${f} > ${tmp} || fail "failed to sed ${f}"
+        move ${tmp} ${f} && info "set tempUsage to ${temp_usage_limit} in ${f}"
+    fi
+}
+
+function configure-amq-transport-connectors()
+{
+    debug-arguments $@
+
+    [ -z "${AMQ_HOME}" ] && fail "AMQ_HOME not set"
+    [ -h "${AMQ_HOME}" ] || fail "AMQ_HOME ${AMQ_HOME} not a valid link"
+    [ -d "${AMQ_HOME}/bin" ] || fail "AMQ_HOME/bin ${AMQ_HOME}/bin not a valid directory"
+
+    [ -z "${general_purpose_connector_port}" ] && fail "'general_purpose_connector_port' not defined"
+    [ -z "${network_bridge_port}" ] && fail "'network_bridge_port' not defined"
+    [ -z "${brokers}" ] && fail "'brokers' not defined"
+
+    local name=$(hostname)
+    local f=${AMQ_HOME}/etc/activemq.xml
+
+    if grep -q "<transportConnector.*${name}:${general_purpose_connector_port}" ${f}; then
+        debug "transport connectors already configured in ${f}"
+    else
+        local tmp=$(unique-file)
+        sed -e 's/^\(.*transportConnector.*uri=\"tcp:\/\/\).*\(\?maximumConnections.*$\)/\1'"${name}":"${general_purpose_connector_port}"'\2/' ${f} > ${tmp} || fail "failed to sed ${f}"
+        move ${tmp} ${f} && info "updated the general purpose transportConnector to ${name}:${general_purpose_connector_port} in ${f}"
+    fi
+
+    # create a connector for each peer broker
+    for b in ${brokers}; do
+        [ "${b}" = "${name}" ] && continue;
+        # we call them "<name>-inflow" so we first make sure the transport is not already there
+        local transport_name="${b}-inflow"
+        if grep -q "transportConnector name=\"${transport_name}\"" ${f}; then
+            debug "transport connector '${transport_name}' already exists"
+        else
+            local n
+            local tmp=$(unique-file)
+            n=$(cat ${f} | grep -n "transportConnector name=" | tail -1) || failed "failed to determine the line number"
+            n=${n%%:*}
+            sed -e ${n}'a\
+             <transportConnector name="'"${transport_name}"'" uri="tcp://'"${name}"':'"${network_bridge_port}"'"/>' ${f} > ${tmp} || fail "failed to sed ${f}"
+            move ${tmp} ${f} && info "added '${transport_name}' transportConnector in ${f}"
+        fi
+    done
+}
+
+function configure-amq-network-connectors()
+{
+    debug-arguments $@
+
+    [ -z "${AMQ_HOME}" ] && fail "AMQ_HOME not set"
+    [ -h "${AMQ_HOME}" ] || fail "AMQ_HOME ${AMQ_HOME} not a valid link"
+    [ -d "${AMQ_HOME}/bin" ] || fail "AMQ_HOME/bin ${AMQ_HOME}/bin not a valid directory"
+
+    [ -z "${network_bridge_port}" ] && fail "'network_bridge_port' not defined"
+    [ -z "${brokers}" ] && fail "'brokers' not defined"
+
+    local username=admin
+    local password=admin123
+
+    local name=$(hostname)
+    local f=${AMQ_HOME}/etc/activemq.xml
+
+    if grep -q "<networkConnectors" ${f}; then
+        debug "network connectors already configured in ${f}"
+    else
+        local n
+        n=$(cat ${f} | grep -n "</transportConnectors>" | tail -1) || failed "failed to determine the line number"
+        n=${n%%:*}
+
+        local target;
+
+        for b in ${brokers}; do
+            [ "${b}" = "${name}" ] && continue;
+            target=${b}
+
+            local tmp=$(unique-file)
+            # it only works with two brokers (TODO)
+            sed -e ${n}'a\
+\
+        <networkConnectors>\
+            <networkConnector name="unidirectional-bridge-to-'"${target}"'" uri="static:(tcp://'"${target}"':'"${network_bridge_port}"')"\
+                              networkTTL="3" duplex="false" userName="'"${username}"'" password="'"${password}"'">\
+            </networkConnector>\
+        </networkConnectors>' ${f} > ${tmp} || fail "failed to sed ${f}"
+            move ${tmp} ${f} && info "added network connectors to ${target}:${network_bridge_port} in ${f}"
+        done
+    fi
+}
+
+function configure-amq-persistence()
+{
+    debug-arguments $@
+
+    [ -z "${AMQ_HOME}" ] && fail "AMQ_HOME not set"
+    [ -h "${AMQ_HOME}" ] || fail "AMQ_HOME ${AMQ_HOME} not a valid link"
+    [ -d "${AMQ_HOME}/bin" ] || fail "AMQ_HOME/bin ${AMQ_HOME}/bin not a valid directory"
+
+    local clustered=false
+    local name=$(hostname)
+    local f=${AMQ_HOME}/etc/activemq.xml
+
+    if ${clustered}; then
+
+        local cluster
+        if [ "${name}"="b01" -o "${name}"="b04" ]; then
+            cluster="cluster01"
+        elif [ "${name}"="b02" -o "${name}"="b05" ]; then
+            cluster="cluster02"
+        elif [ "${name}"="b03" -o "${name}"="b06" ]; then
+            cluster="cluster03"
+        else
+	        fail "unknown name ${name}"
+        fi
+
+        local tmp=$(unique-file)
+
+        sed -e 's/^.*kahaDB.*$/            <kahaDB directory="\/nfs\/'${cluster}'\/kahadb" lockKeepAlivePeriod="5000"\/>/' ${f} > ${tmp} || fail "failed to sed ${f}"
+        move ${tmp} ${f} && info "updated persistence in ${f}"
+    fi
+
+    #
+    # non-clustered this is a noop, default configuration based on ${data} is good enough
+    #
+}
+
+function configure-amq-logging()
+{
+    debug-arguments $@
+
+    [ -z "${AMQ_HOME}" ] && fail "AMQ_HOME not set"
+    [ -h "${AMQ_HOME}" ] || fail "AMQ_HOME ${AMQ_HOME} not a valid link"
+    [ -d "${AMQ_HOME}/bin" ] || fail "AMQ_HOME/bin ${AMQ_HOME}/bin not a valid directory"
+
+    [ "${log_maxFileSize}" = "" ] && fail "'log_maxFileSize' not defined"
+
+    local f=${AMQ_HOME}/etc/org.ops4j.pax.logging.cfg
+    local tmp=$(unique-file)
+
+    if grep -q "^log4j\.appender\.out\.maxFileSize=${log_maxFileSize}" ${f}; then
+        debug "logging already configured in ${f}"
+    else
+        sed -e 's/^log4j\.appender\.out\.maxFileSize=.*$/log4j.appender.out.maxFileSize='${log_maxFileSize}'/' \
+            -e 's/^\(log4j.appender.out.maxBackupIndex=.*\)$/#\1/' ${f} > ${tmp} || fail "failed to sed ${f}"
+        move ${tmp} ${f} && info "updated logging in ${f}"
+    fi
+}
+
+function configure-amq-permissions()
+{
+    [ -z "${AMQ_HOME}" ] && fail "AMQ_HOME not set"
+    [ -h "${AMQ_HOME}" ] || fail "AMQ_HOME ${AMQ_HOME} not a valid link"
+    [ -d "${AMQ_HOME}/bin" ] || fail "AMQ_HOME/bin ${AMQ_HOME}/bin not a valid directory"
+
+    chgrp ec2-user ${AMQ_HOME} && info "chgrp ec2-user ${AMQ_HOME}"
+    chmod g+w ${AMQ_HOME} && info "chmod g+w ${AMQ_HOME}"
+    chgrp -R ec2-user ${AMQ_HOME}/data && info "chgrp -R ec2-user ${AMQ_HOME}/data"
+    chmod -R g+w ${AMQ_HOME}/data && info "chmod -R g+w ${AMQ_HOME}/data"
+    chgrp -R ec2-user ${AMQ_HOME}/etc && info "chgrp -R ec2-user ${AMQ_HOME}/etc"
+    chmod -R g+w ${AMQ_HOME}/etc && info "chmod -R g+w ${AMQ_HOME}/etc"
+}
+
+# return 0 if the function changed state or 1 if not
+function update-user-environment-for-amq()
+{
+    debug-arguments $@
+
+    local user=$1
+    [ "${user}" = "" ] && fail "${FUNCNAME[0]}: 'name' not provided"
+    [ -z ${AMQ_HOME} ] && fail "previous steps failed to export AMQ_HOME"
+    [ -d ${AMQ_HOME}/bin ] || fail "${AMQ_HOME}/bin does not exist"
+
+    local bashrc_file="$(get-home ${user})/.bashrc"
+
+    if ! grep -q "^export AMQ_HOME=${AMQ_HOME}" ${bashrc_file}; then
+        echo "" >> ${bashrc_file}
+        echo "export AMQ_HOME=${AMQ_HOME}" >> ${bashrc_file}
+        echo "alias amq='cd \${AMQ_HOME}'" >> ${bashrc_file}
+        echo "alias amqb='cd \${AMQ_HOME}/bin'" >> ${bashrc_file}
+        echo "alias amql='cd \${AMQ_HOME}/data/log'" >> ${bashrc_file}
+        echo "alias amqc='cd \${AMQ_HOME}/etc'" >> ${bashrc_file}
+        echo "alias amq-start='\${AMQ_HOME}/bin/start'" >> ${bashrc_file}
+        echo "alias amq-stop='\${AMQ_HOME}/bin/stop'" >> ${bashrc_file}
+        info "AMQ environment configured for user ${user}"
+        return 0
+    else
+        info "AMQ environment already configured for user ${user}"
+        return 1
+    fi
+}
+
+function update-etc-hosts-with-other-brokers()
+{
+    debug-arguments $@
+
+    local brokers="$1"
+
+    [ -z "${brokers}" ] && fail "${FUNCNAME[0]}: 'brokers' not specified"
+
+    local name=$(hostname)
+
+    for b in ${brokers}; do
+        [ "${b}" = "${name}" ] && continue;
+        local ip="172.31.0.0"
+        update-etc-hosts ${b} ${ip}
+    done
+}

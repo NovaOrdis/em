@@ -62,7 +62,7 @@ function install-java()
 
     local extraction_output
     extraction_output=$(cd /opt; gunzip < ${f} | tar xfv -) && \
-        debug "successfully extracted ${f} into /opt" fail "failed to extract ${f} into /opt"
+        debug "successfully extracted ${f} into /opt" || fail "failed to extract ${f} into /opt"
 
     debug "$extraction_output}"
     local java_dir=${extraction_output%%/*}
