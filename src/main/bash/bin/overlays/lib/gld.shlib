@@ -31,5 +31,21 @@ function update-user-environment-for-gld()
         info "GLD environment already configured for user ${user}"
         return 1
     fi
+}
+
+function update-etc-hosts-with-potential-servers()
+{
+    debug-arguments $@
+
+    while [ -n "$1" ]; do
+        local name=$1
+        shift
+        local private_ip=$(get-private-ip ${name})
+        if [ -z "${private_ip}" ]; then
+            warn "host ${name} is not known to the environment"
+            continue;
+        fi
+        update-etc-hosts ${name} ${private_ip} && info "added ${name}(${private_ip}) to /etc/hosts"
+    done
 
 }

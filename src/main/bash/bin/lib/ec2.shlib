@@ -125,7 +125,9 @@ function insure-access-keys-are-correctly-set-up-or-fail()
 # runs ec2-describe-instances and gets the private IP address associated with the name. This is an expensive operation
 # as it requires at least two JVM instances to be started and WAN access. Normally you should only use it once when
 # setting the name/ip pairs in /etc/hosts.
-
+#
+# TODO: because is expensive, refactor it to accept multiple arguments and do the ec2-api-tool call and Java call only once
+#
 # may return empty string if the name cannot be resolved
 function get-private-ip()
 {
