@@ -13,8 +13,8 @@ function main()
     local link_target
     link_target=$(readlink $0) || exit 1
     link_target_dir=$(dirname ${link_target})
-    lib=${link_target_dir}/../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
-    lib=${link_target_dir}/../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+    lib=${link_target_dir}/lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+    lib=${link_target_dir}/lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 
     local name=$(basename $0)
     local ip

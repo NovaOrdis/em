@@ -1,17 +1,21 @@
 #!/bin/bash
 
-lib=$(dirname $0)/../../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 
 function usage()
 {
 cat <<EOF
 
-Create a set of Amazon EC2 intance.
+Create a set of Amazon EC2 instances.
 
 Usage:
 
-    em create <instance-name> [instance-name ...]
+    em create [options] <instance-name> [instance-name ...]
+
+Options:
+
+
 
 EOF
 exit 0
