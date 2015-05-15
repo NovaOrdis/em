@@ -340,12 +340,14 @@ function configure-amq-permissions()
     [ -h "${AMQ_HOME}" ] || fail "AMQ_HOME ${AMQ_HOME} not a valid link"
     [ -d "${AMQ_HOME}/bin" ] || fail "AMQ_HOME/bin ${AMQ_HOME}/bin not a valid directory"
 
-    chgrp ec2-user ${AMQ_HOME} && info "chgrp ec2-user ${AMQ_HOME}"
-    chmod g+w ${AMQ_HOME} && info "chmod g+w ${AMQ_HOME}"
-    chgrp -R ec2-user ${AMQ_HOME}/data && info "chgrp -R ec2-user ${AMQ_HOME}/data"
-    chmod -R g+w ${AMQ_HOME}/data && info "chmod -R g+w ${AMQ_HOME}/data"
-    chgrp -R ec2-user ${AMQ_HOME}/etc && info "chgrp -R ec2-user ${AMQ_HOME}/etc"
-    chmod -R g+w ${AMQ_HOME}/etc && info "chmod -R g+w ${AMQ_HOME}/etc"
+    chgrp ec2-user ${AMQ_HOME} && debug "chgrp ec2-user ${AMQ_HOME}"
+    chmod g+w ${AMQ_HOME} && debug "chmod g+w ${AMQ_HOME}"
+    chgrp -R ec2-user ${AMQ_HOME}/data && debug "chgrp -R ec2-user ${AMQ_HOME}/data"
+    chmod -R g+w ${AMQ_HOME}/data && debug "chmod -R g+w ${AMQ_HOME}/data"
+    chgrp -R ec2-user ${AMQ_HOME}/etc && debug "chgrp -R ec2-user ${AMQ_HOME}/etc"
+    chmod -R g+w ${AMQ_HOME}/etc && info "debug -R g+w ${AMQ_HOME}/etc"
+
+    info "${AMQ_HOME}, ${AMQ_HOME}/data, ${AMQ_HOME}/etc permissions configured"
 }
 
 # return 0 if the function changed state or 1 if not
@@ -398,7 +400,68 @@ function update-etc-hosts-with-other-brokers()
     done
 }
 
+#
+# returns 0 if anything was changed on the system or 1 otherwise
+#
 function configure-amq-to-start-at-boot()
 {
-    warn "configure-amq-to-start-at-boot(): NOT YET IMPLEMENTED"
+    local systemd_scripts_activemq_file=$1
+    local systemd_system_activemq_service_file=$2
+
+    [ -z "${systemd_scripts_activemq_file}" ] && systemd_scripts_activemq_file="/usr/lib/systemd/scripts/activemq"
+    [ -z "${systemd_system_activemq_service_file}" ] && systemd_system_activemq_service_file="/usr/lib/systemd/system/activemq.service"
+
+    local modified=false
+
+    if [ -f ${systemd_scripts_activemq_file} ]; then
+        debug "${systemd_scripts_activemq_file} already created"
+    else
+        debug "creating ${systemd_scripts_activemq_file} ..."
+(cat << EOF
+#!/bin/bash
+
+case \$1 in
+
+start|stop)
+
+    sudo -u ec2-user /bin/bash --login -c "\\\${AMQ_HOME}/bin/\$1"
+    ;;
+
+*)
+    echo "no such option \$1" 1>&2
+    exit 1
+esac
+
+EOF
+) > ${systemd_scripts_activemq_file} && info "created ${systemd_scripts_activemq_file}" || fail "failed to create ${systemd_scripts_activemq_file}"
+
+        chmod a+x ${systemd_scripts_activemq_file} && debug "chmod a+x ${systemd_scripts_activemq_file}" || fail "failed to chmod a+x ${systemd_scripts_activemq_file}"
+        modified=true
+    fi
+
+    if [ -f ${systemd_system_activemq_service_file} ]; then
+        debug "${systemd_system_activemq_service_file} already created"
+    else
+        debug "creating ${systemd_system_activemq_service_file} ..."
+(cat << EOF
+[Unit]
+Description=AMQ Server
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/systemd/scripts/activemq start
+ExecStop=/usr/lib/systemd/scripts/activemq stop
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+) > ${systemd_system_activemq_service_file} && info "created ${systemd_system_activemq_service_file}" || fail "failed to create ${systemd_system_activemq_service_file}"
+
+        debug "attempting systemctl enable activemq.service"
+        systemctl enable activemq.service && info "service activemq.service enabled" || fail "failed to enable activemq.service"
+        modified=true
+    fi
+
+    ${modified} && return 0 || return 1
 }

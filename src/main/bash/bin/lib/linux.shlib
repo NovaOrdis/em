@@ -295,6 +295,7 @@ function setup-nfs-client()
         # already setup
         local etc_fstab_nfs_server_name=${line%%:*}
         [ "${etc_fstab_nfs_server_name}" = "${nfs_server_name}" ] && \
+            debug "${etc_fstab} already configured, it contains a mount from ${etc_fstab_nfs_server_name}" || \
             fail "the name of the file server already configured in ${etc_fstab} (${etc_fstab_nfs_server_name}) is different from the server we're about to configure (${nfs_server_name})"
     else
         # needs setting up
