@@ -169,6 +169,16 @@ function size-amq-broker()
         move ${tmp} ${f} && info "set memoryUsage to ${memory_usage_limit} in ${f}"
     fi
 
+    [ -z "${store_usage_limit}" ] && fail "'store_usage_limit' not defined"
+
+    if grep -q "<storeUsage limit=\"${store_usage_limit}\"/>" ${f}; then
+        debug "storeUsage limit already set to ${store_usage_limit} in ${f}"
+    else
+        local tmp=$(unique-file)
+        sed -e 's/\(^.*storeUsage limit=\).*$/\1\"'"${store_usage_limit}"'\"\/>/' ${f} > ${tmp} || fail "failed to sed ${f}"
+        move ${tmp} ${f} && info "set storeUsage to ${store_usage_limit} in ${f}"
+    fi
+
     [ -z "${temp_usage_limit}" ] && fail "'temp_usage_limit' not defined"
 
     if grep -q "<tempUsage limit=\"${temp_usage_limit}\"/>" ${f}; then

@@ -11,7 +11,7 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 # configuration TODO: this must go somewhere else
 #
 
-amq_brokers="XoXo"
+amq_brokers="b01 b02"
 
 #
 # dependencies
