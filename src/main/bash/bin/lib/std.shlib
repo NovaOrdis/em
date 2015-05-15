@@ -19,11 +19,11 @@ function debug
 }
 
 #
-# Send error information at stderr and exit
+# Send error information at stderr and exit. The return code is 255.
 #
 function fail
 {
-    echo "[error]: $@" 1>&2 && exit 1
+    echo "[error]: $@" 1>&2 && exit 255
 }
 
 function debug-arguments
@@ -275,34 +275,45 @@ function move()
 }
 
 #
-# Removes a regular expression from the file (but not the line)
-#
-# Return 0 if something was actually removed or 1 if the file was not changed
-#
-#function remove-regex()
-#{
-#    local regex=$1
-#    local file=$2
-#
-#    local tmp=$(unique-file)
-#    sed -e 's/'"${regex}"'//' ${file} > ${tmp} || fail "fail to execute sed -e 's/${regex}//' on ${file}"
-#    diff ${file} ${tmp} > /dev/null && { rm ${tmp}; return 1; } # identical files, no replacement made
-#    mv ${tmp} ${file} && return 0 || fail "failed to restore ${file}"
-#}
-
-#
 # Removes the whole line if it contains the regular expression
 #
 # Return 0 if something was actually removed or 1 if the file was not changed
 #
 # TODO add tests if I need to change it
 #
-function remove-line()
+function remove-regex-line()
 {
     local regex=$1
     local file=$2
     local tmp=$(unique-file)
     sed -e '/'"${regex}"'/d' ${file} > ${tmp} || fail "fail to execute sed -e '/'${regex}'/d' on ${file}"
     diff ${file} ${tmp} > /dev/null && { rm ${tmp}; debug "${regex} not in ${file}"; return 1; } # identical files, no replacement made
-    mv ${tmp} ${file} && return 0 || fail "failed to restore ${file}"
+    mv ${tmp} ${file} && { debug "line matching '${regex}' was removed from ${file}"; return 0; } || fail "failed to restore ${file}"
 }
+
+#
+# Replaces source_regex with target_regex. The source_regex and target_regex will be used in the same sed expression,
+# so \1 will work.
+#
+# Example:
+#
+# replace-regex "^\(Defaults[ \t]*requiretty[ \t]*\)$" "#\1" /etc/sudoers
+#
+# The function returns 0 if the file was modified and 1 if no modification occured
+#
+function replace-regex()
+{
+    local source_regex=$1
+    local target_regex=$2
+    local file=$3
+
+    local tmp=$(unique-file)
+    sed -e 's/'"${source_regex}"'/'"${target_regex}"'/g' ${file} > ${tmp} || fail "fail to execute sed -e 's/'${source_regex}'/'"${target_regex}"'/g' on ${file}"
+    diff ${file} ${tmp} > /dev/null && { rm ${tmp}; debug "${source_regex} not found in ${file}, no replacement was made"; return 1; } # identical files, no replacement made
+    mv ${tmp} ${file} && { debug "'${source_regex}' replaced in ${file}"; return 0; } || fail "failed to restore ${file}"
+}
+
+########################################################################################################################
+# Data format verification
+########################################################################################################################
+

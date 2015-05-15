@@ -50,6 +50,8 @@ setup-nfs-client ${name} ${nfs_server_ip} ${nfs_server_name} && info "NFS client
 
 install-authorized-keys
 
+sudo-configure-requiretty off && info "removed requiretty from /etc/sudoers" || debug "requiretty already removed from /etc/sudoers"
+
 
 
 

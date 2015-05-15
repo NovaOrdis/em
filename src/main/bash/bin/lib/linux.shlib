@@ -203,9 +203,9 @@ function set-hostname()
         hostnamectl set-hostname ${name} && debug "executed hostnamectl set-hostname ${name}" || fail "failed to execute hostnamectl set-hostname ${name}"
     fi
 
-    remove-line "^ - set_hostname *$" ${etc_cloud_cloud_cfg} && { modified=true; debug "removed set_hostname from ${etc_cloud_cloud_cfg}"; }
-    remove-line "^ - update_hostname *$" ${etc_cloud_cloud_cfg} && { modified=true; debug "removed update_hostname from ${etc_cloud_cloud_cfg}"; }
-    remove-line "^ - update_etc_hosts *$" ${etc_cloud_cloud_cfg} && { modified=true; debug "removed update_etc_hosts from ${etc_cloud_cloud_cfg}"; }
+    remove-regex-line "^ - set_hostname *$" ${etc_cloud_cloud_cfg} && { modified=true; debug "removed set_hostname from ${etc_cloud_cloud_cfg}"; }
+    remove-regex-line "^ - update_hostname *$" ${etc_cloud_cloud_cfg} && { modified=true; debug "removed update_hostname from ${etc_cloud_cloud_cfg}"; }
+    remove-regex-line "^ - update_etc_hosts *$" ${etc_cloud_cloud_cfg} && { modified=true; debug "removed update_etc_hosts from ${etc_cloud_cloud_cfg}"; }
 
     ${modified} && return 0 || return 1
 }
@@ -238,7 +238,7 @@ function get-primary-ip()
 }
 
 ########################################################################################################################
-# NSF functions
+# NFS functions
 ########################################################################################################################
 
 # returns empty string if not found or if the name is not present in /etc/hosts
@@ -359,4 +359,31 @@ function install-authorized-key()
         { debug "wrote key ${type}/${owner} into ${authorized_keys_file}"; return 0; } || \
         fail "failed to write key ${type}/${owner} into ${authorized_keys_file}"
 
+}
+
+########################################################################################################################
+# sudo configuration functions
+########################################################################################################################
+
+# Turns on or off "requiretty" setting in /etc/sudoers.
+#
+# return 0 if the /etc/sudoers is modified and 1 otherwise
+function sudo-configure-requiretty()
+{
+    debug-arguments $@
+
+    local mode=$1 # must be "on" or "off"
+    local etc_sudoers=$2 # optional
+
+    [ -z "${mode}" ] && fail "${FUNCNAME[0]}: 'mode' not provided"
+    [ ${mode} = "on" -o ${mode} = "off" ] || fail "${FUNCNAME[0]}: 'mode' must be on|off (and it is ${mode})"
+    [ -z "${etc_sudoers}" ] && etc_sudoers=/etc/sudoers
+
+    [ "${mode}" = "on" ] && fail "${FUNCNAME[0]} mode=${mode} NOT YET IMPLEMENTED"
+
+    #
+    # only "off" for the time being
+    #
+
+    replace-regex "^\(Defaults *requiretty *\)$" "#\1" ${etc_sudoers}
 }
