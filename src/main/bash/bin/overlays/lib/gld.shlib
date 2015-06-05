@@ -24,7 +24,7 @@ function update-user-environment-for-gld()
     if ! grep -q "^export GLD_HOME=${GLD_HOME}" ${bashrc_file}; then
         echo "" >> ${bashrc_file}
         echo "export GLD_HOME=${GLD_HOME}" >> ${bashrc_file}
-        echo "export PATH=\${GLD_HOME}/bin:\${PATH}" >> ${bashrc_file}
+        echo "export PATH=\${GLD_HOME}/bin:/nfs/load:\${PATH}" >> ${bashrc_file}
         info "GLD environment configured for user ${user}"
         return 0
     else
