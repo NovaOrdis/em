@@ -189,6 +189,7 @@ function jw()
 
     local etc_dir
     local em_jar_dir
+    local em_jar_path
     local log4j_jar_dir
 
     #
@@ -208,18 +209,21 @@ function jw()
             debug "the em jar directory ${em_jar_dir} not found, it looks like we're not in a develoment environment, trying \${EM_HOME}/lib ..."
             em_jar_dir=${EM_HOME}/lib
             log4j_jar_dir=${em_jar_dir}
+            em_jar_path=$(ls ${EM_HOME}/lib/em-*.jar) || fail "failed to ls ${EM_HOME}/lib/em-*.jar"
+
         fi
      else
         etc_dir=$(dirname $0)/../../etc
         em_jar_dir=$(dirname $0)/../../../../../target
+        em_jar_path=${em_jar_dir} && fail "std.shlib NOT YET IMPLEMENTED"
         log4j_jar_dir=${M2}/log4j/log4j/1.2.16
     fi
 
     [ -d ${etc_dir} ] || fail "the em etc directory ${etc_dir} does not seem to be accessible"
-    [ -d ${em_jar_dir} ] || fail "the em jar directory ${em_jar_dir} not found"
+    [ -f ${em_jar_path} ] || fail "the em jar file ${em_jar_path} not found"
     [ -d ${log4j_jar_dir} ] || fail "the em log4j directory ${log4j_jar_dir} not found"
 
-    local classpath="${em_jar_dir}/em-1.0-SNAPSHOT.jar:${etc_dir}:${log4j_jar_dir}/log4j-1.2.16.jar"
+    local classpath="${em_jar_path}:${etc_dir}:${log4j_jar_dir}/log4j-1.2.16.jar"
 
     ${debug} && jvm_debug_args="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5006"
 

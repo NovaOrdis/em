@@ -13,7 +13,8 @@ function usage()
 {
 cat <<EOF
 
-Runs an arbitrary command, in parallel, on all environment instances specified as argument:
+Runs an arbitrary command,  in parallel,  on all environment instances specified as argument.  All
+global options apply.
 
 Usage:
 
@@ -22,6 +23,12 @@ Usage:
 Example:
 
     em run p01 p02 -- gld version
+
+Options:
+
+    --preserve-output-files  -  do not  delete  the temporary output files  that collect stout and
+        stderr.   If this option is used, those files will accumulate in the current directory and
+        will require manual cleanup.
 
 EOF
 exit 0
@@ -44,6 +51,7 @@ function main()
 
     local i=0
     local add_to_remote_command=false
+    local preserve_output_files=false
     local remote_command=""
     for n in ${args}; do
         if ${add_to_remote_command}; then
@@ -51,13 +59,17 @@ function main()
             continue;
         fi
         [ "${n}" = "--" ] && { add_to_remote_command=true; continue; }
+        [ "${n}" = "--preserve-output-files" ] && { preserve_output_files=true; continue; }
         names[${i}]=${n}
         (( i++ ))
     done
 
     debug "remote_command: ${remote_command}"
 
+    #
     # run ssh for each instance in background and store the stout/stderr in arrays
+    #
+
     for (( i=0; i<${#names[@]}; i++ )); do
 
         stdout_file=$(unique-file . "${names[${i}]}-stdout")
@@ -86,6 +98,7 @@ function main()
     debug "displaying stdout and stderr content from remote processes ..."
 
     for (( i=0; i<${#names[@]}; i++ )); do
+
         local stdout_file=${stdout_files[${i}]}
         local stderr_file=${stderr_files[${i}]}
 
@@ -107,8 +120,12 @@ function main()
         echo ""
         echo "------------------------------------------------------------------------------------------------------------------------------"
 
-        rm ${stdout_file} && debug "removed ${stdout_file}"
-        rm ${stderr_file} && debug "removed ${stderr_file}"
+        if ${preserve_output_files}; then
+            debug "preserving output files ${stdout_file}, ${stderr_file}"
+        else
+            rm ${stdout_file} && debug "removed ${stdout_file}"
+            rm ${stderr_file} && debug "removed ${stderr_file}"
+        fi
     done
 }
 
@@ -125,11 +142,8 @@ function invoke-instance()
 
     debug "command: ${command}"
 
-    local stdout
+    ${command}
 
-    stdout=$(${command})
-
-    echo ${stdout}
     retcode=$?
 
     [ ${retcode} -eq 255 ] && echo "FAIL: SSH ERROR on ${name}"

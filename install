@@ -1,0 +1,91 @@
+#!/bin/bash
+
+help=false
+verbose=false
+no_tests=false
+project_home="."
+
+function debug()
+{
+    ${verbose} && echo "$@" 1>&2;
+    return 0
+}
+
+function debug-arguments
+{
+    ${verbose} && echo "${FUNCNAME[1]}($@)" 1>&2;
+    return 0
+}
+
+function fail
+{
+    echo "[error]: $@" 1>&2 && exit 1
+}
+
+#
+# returns the version from pom.xml
+#
+function get-version()
+{
+    debug-arguments $@
+
+    local project_home=$1
+    [ -z "${project_home}" ] && fail "'project_home' not defined"
+    local pom_file=${project_home}/pom.xml
+    [ -f ${pom_file} ] || fail "POM file ${pom_file} not found"
+    local line;
+    line=$(grep "^ *<version>" ${pom_file} | head -1) || fail "failed to get <version> from ${pom_file}"
+    [ "${line}" = "" ] && fail "empty version in ${pom_file}"
+    local version;
+    version=${line#*>}
+    version=${version%%\<*}
+    [ "${version}" = "" ] && fail "could not extract version from ${pom_file}"
+    echo ${version}
+}
+
+zip_only=false
+
+while [ -n "$1" ]; do
+    if [ "$1" = "--zip-only" ]; then
+        zip_only=true
+    fi
+    shift
+done
+
+project_home=/Users/ovidiu/projects/em
+
+cd ${project_home}/target
+version=$(get-version ${project_home}) || fail "failed to get version"
+zip_dir_name=em-${version}
+mkdir ./${zip_dir_name} || fail "failed to create ./${zip_dir_name}"
+cp -r ${project_home}/src/main/bash/bin ./${zip_dir_name} || fail "failed to copy"
+cp -r ${project_home}/src/main/bash/doc ./${zip_dir_name} || fail "failed to copy"
+cp -r ${project_home}/src/main/bash/etc ./${zip_dir_name} || fail "failed to copy"
+mkdir ./${zip_dir_name}/lib || fail "failed to create ./${zip_dir_name}/lib"
+cp ${project_home}/target/em-${version}.jar ./${zip_dir_name}/lib || fail "failed to copy"
+cp ${M2}/log4j/log4j/1.2.16/log4j-1.2.16.jar ./${zip_dir_name}/lib || fail "failed to copy"
+zip -r ./em-${version}.zip em-${version} || fail "failed to zip"
+
+echo "zip ok"
+
+${zip_only} && exit 0
+
+cd /opt
+rm -rf em-* || fail "failed to rm"
+
+cp ${project_home}/target/em-${version}.zip /opt || fail "failed to copy"
+
+cd /opt
+unzip em-${version}.zip  || fail "failed to unzip"
+
+echo "install ok"
+
+
+
+
+
+
+
+
+
+

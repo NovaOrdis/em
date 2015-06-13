@@ -83,15 +83,12 @@ function main()
     debug "gzip_file: ${gzip_file}"
     debug "tar_root: ${tar_root}"
 
-    (cd ${tar_root}; tar cf${tar_verbose} - bin/overlays bin/lib etc > ${tar_file}) || fail "failed to create ${tar_file}"
+    # make sure ${tar_root}/lib exists - if it doesn't we might be in a situation when we're running from a
+    # development directory and we want to get rid of that in the long run
 
-    tar_root=$(dirname $0)/../../../../../target
-    debug "tar_root: ${tar_root}"
+    [ -d ${tar_root}/lib ] || fail "${tar_root}/lib not found - you need probably running from a non-standard location"
 
-    local jar_name=em-1.0-SNAPSHOT.jar
-    [ -f ${tar_root}/${jar_name} ] || fail "${tar_root}/${jar_name} not found - you need to build the project"
-
-    (cd ${tar_root}; [ -d lib ] || mkdir lib; cp ${jar_name} lib; cp ${M2}/log4j/log4j/1.2.16/log4j-1.2.16.jar lib; tar rf${tar_verbose} ${tar_file} lib) || fail "failed to refresh ${tar_file}"
+    (cd ${tar_root}; tar cf${tar_verbose} - bin/overlays bin/lib etc lib > ${tar_file}) || fail "failed to create ${tar_file}"
 
     gzip ${tar_file}
 
