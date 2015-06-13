@@ -77,6 +77,7 @@ cp ${project_home}/target/em-${version}.zip /opt || fail "failed to copy"
 
 cd /opt
 unzip em-${version}.zip  || fail "failed to unzip"
+rm em-${version}.zip || fail "failed to rm"
 
 echo "install ok"
 
