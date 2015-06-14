@@ -32,12 +32,6 @@ EOF
 exit 0
 }
 
-function read-bootstrap-configuration()
-{
-    local bootstrap_conf_file=$(dirname $0)/../etc/bootstrap.conf
-    [ -f ${bootstrap_conf_file} ] && . ${bootstrap_conf_file} || warn "bootstrap configuration file ${bootstrap_conf_file} not found"
-}
-
 function main()
 {
     process-common-arguments $@
@@ -45,6 +39,8 @@ function main()
     [ "${args}" = "" ] && usage;
 
     read-bootstrap-configuration
+    read-user-configuration
+
 
     #
     # the first "non-common" argument is the command

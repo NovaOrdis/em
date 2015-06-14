@@ -63,11 +63,11 @@ function in-ec2()
     return 1
 }
 
-function get-installation-identity-file()
+function get-instance-provisioning-private-key-file()
 {
-    local file="$(dirname $0)/../../../resources/installation_access.pem"
-    [ -f ${file} ] || fail "installation identity file ${file} not found"
-    echo ${file}
+    local private_key_file="${HOME}/.ssh/em-provisioning-private-key.pem"
+    [ -f ${private_key_file} ] || fail "em provisioning private key ${private_key_file} not found"
+    echo ${private_key_file}
 }
 
 #

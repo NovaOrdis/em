@@ -101,7 +101,7 @@ function main()
     # when scping and sshing, we use the "installation" identity
     local sqp_quiet="-q"
     ${verbose} && scp_quiet=""
-    local scp_command="scp ${sqp_quiet} -i $(get-installation-identity-file) ${gzip_file} ${ssh_url}:/tmp"
+    local scp_command="scp ${sqp_quiet} -i $(get-instance-provisioning-private-key-file) ${gzip_file} ${ssh_url}:/tmp"
     debug "scp command: ${scp_command}"
 
     debug "staging tools on ${name} (${ssh_url}) ..."
@@ -118,7 +118,7 @@ function main()
     [ -n "${AWS_ACCESS_KEY}" ] && aws_access_key_arg="--aws-access-key ${AWS_ACCESS_KEY}" || debug "AWS_ACCESS_KEY not found in environment. This means overlay ec2-api-tools will not work on remote instances."
 
     local remote_command="cd /tmp; [ ! -d ./em ] && mkdir em; cd em; tar xfz${tar_verbose} ../$(basename ${gzip_file}); cd ..; rm ${gzip_file}; export EM_HOME=/tmp/em; ./em/bin/overlays/${overlay} $(serialize-common-arguments) --instance-name ${name} ${aws_access_key_arg} ${aws_secret_key_arg} ${ec2_url_arg} --nfs-server-ip ${nfs_server_ip}"
-    local ssh_sudo_wrapper="ssh -i $(get-installation-identity-file) -t ${ssh_url} sudo -n bash -c \"${remote_command}\""
+    local ssh_sudo_wrapper="ssh -i $(get-instance-provisioning-private-key-file) -t ${ssh_url} sudo -n bash -c \"${remote_command}\""
 
     # mask --aws-secret-key, if present
     debug "ssh_sudo_wrapper: ${ssh_sudo_wrapper/${aws_secret_key_arg}/--aws-secret-key ***}"

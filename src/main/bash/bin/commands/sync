@@ -10,8 +10,8 @@ function usage()
 cat <<EOF
 
 Query the current Amazon EC2 region \$EC2_URL (${EC2_URL}), pull the current public IP addresses
-associated with running instances, updates /etc/hosts with the latest public IP values and creates the required
-login symbolic links if necessary.
+associated with running instances, update /etc/hosts with the latest public IP values and create
+the required login symbolic links if necessary.
 
 EOF
 exit 0
@@ -34,6 +34,7 @@ function main()
     [ "${running_instances_name_and_public_ip}" = "" ] && { info "no running hosts"; exit 0; }
 
     for i in ${running_instances_name_and_public_ip}; do
+
         local name=${i%%:*}
         local ip=${i##*:}
         debug "running instance: ${name}/${ip}"

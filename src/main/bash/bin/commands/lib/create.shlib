@@ -80,16 +80,14 @@ fi
     echo ${create_option_ami_id}
 }
 
-
-
-create_option_key="installation_access"
+create_option_key="em-provisioning-key-pair"
 function handle-ec2-run-instances-option-key()
 {
     debug-arguments $@
     if [ "$1" = "--help" ]; then
 cat <<EOF
-the name of the key pair registered with Amazon EC2 that will give you access to instance after creation.
-    Default '${create_option_key}'.
+the name of the instance provisioning key pair registered with Amazon EC2 that will give em access
+    to instance during the provisioning process. Default '${create_option_key}'.
 EOF
     return 0
 fi

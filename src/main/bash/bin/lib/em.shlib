@@ -14,6 +14,36 @@ function list-em-commands()
     done
 }
 
+function read-bootstrap-configuration()
+{
+    debug-arguments $@
+
+    local bootstrap_conf_file=$(dirname $0)/../etc/bootstrap.conf
+    [ -f ${bootstrap_conf_file} ] && . ${bootstrap_conf_file} || warn "bootstrap configuration file ${bootstrap_conf_file} not found"
+}
+
+#
+# function reads user-specific configuration. A side effect is creating the user-specific em directory (~/.ec) and
+# the internal directory structure
+#
+function read-user-configuration()
+{
+    debug-arguments $@
+
+    local dir
+
+    if [ ! -d ${HOME}/.em ]; then
+        debug "creating the user .em directory and associated structures"
+        dir=${HOME}/.em; mkdir ${dir} && debug "created ${dir}" || fail "failed to create ${dir}"
+        dir=${HOME}/.em/bin; mkdir ${dir} && debug "created ${dir}" || fail "failed to create ${dir}"
+    elif [ ! -d ${HOME}/.em/bin ]; then
+        # this is in case the bin directory was deleted by mistake
+        dir=${HOME}/.em/bin; mkdir ${dir} && debug "created ${dir}" || fail "failed to create ${dir}"
+    fi
+
+    # TODO - read configuration
+}
+
 ########################################################################################################################
 # environment configuration tools
 ########################################################################################################################
