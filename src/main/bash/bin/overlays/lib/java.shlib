@@ -1,40 +1,6 @@
 #!/bin/bash
 
 #
-# return 0 if the overlay was applied successfully and there is no need to apply it, 1 otherwise
-#
-# If the function decides java was successfully installed, it exports a valid JAVA_HOME in the environment
-#
-function is-overlay-applied()
-{
-    debug "checking whether java was installed ..."
-
-    if [ -h /opt/java ]; then
-        debug "link /opt/java exists, it looks like java was installed"
-        export JAVA_HOME=/opt/java
-        debug "exported JAVA_HOME=${JAVA_HOME}"
-    else
-        debug "link /opt/java does not exist"
-        return 1
-    fi
-
-    # TODO we may also want to check java version, etc.
-
-    local user
-    for user in root ec2-user; do
-        local bashrc_file="$(get-home ${user})/.bashrc"
-        if ! grep -q "^export JAVA_HOME=${JAVA_HOME}" ${bashrc_file}; then
-            debug "java environment not configured for user ${user}"
-            return 1
-        else
-            debug "java environment already configured for user ${user}"
-        fi
-    done
-
-    return 0
-}
-
-#
 # Successful installation exports a valid JAVA_HOME in the environment.
 #
 # return 0 if the installation modified state or 1 if not

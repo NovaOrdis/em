@@ -1,111 +1,6 @@
 #!/bin/bash
 
 #
-# aliases used both by is-overlay-applied() and setup-user-environment()
-#
-
-declare -a ALIASES
-
-ALIASES[0]="alias h='history'"
-ALIASES[1]="alias r='sudo su -'"
-ALIASES[2]="alias nfs='cd /nfs'"
-
-# return 0 if the overlay was applied successfully and there is no need to apply it, 1 otherwise
-function is-overlay-applied()
-{
-    return 1
-
-#    debug "checking whether the hostname is correctly set ..."
-#
-#    [ "$(hostname)" = "${name}" ] && \
-#        { debug "hostname is correctly set to $(hostname)"; } || \
-#        { debug "hostname is not correctly set"; return 1; }
-#
-#    debug "checking whether the NFS client is correctly set ..."
-#
-#    #
-#    # we do that by checking whether the environment configuration file is accessible
-#    #
-#    [ "${ENVIRONMENT_CONFIGURATION_FILE}" = "" ] && \
-#        fail "the ENVIRONMENT_CONFIGURATION_FILE global variable not set, which means the overlay has not been initialized properly"
-#
-#    [ -f ${ENVIRONMENT_CONFIGURATION_FILE} ] && \
-#        debug "NSF client is correctly set" || \
-#        { debug "we cannot see the environment configuration file ${ENVIRONMENT_CONFIGURATION_FILE}, most likely the NSF client is not correctly set (though it is also possible that the environment server was not correctly stood up"; return 1; }
-#
-#    local user
-#    for user in root ec2-user; do
-#
-#        local i=0
-#        while [ ${i} -lt ${#ALIASES[*]} ]; do
-#            local alias=${ALIASES[${i}]}
-#            ((i++))
-#            debug "alias: ${alias}"
-#            local alias_regex
-#            alias_regex=${alias%%\'*}
-#            alias_regex="^${alias_regex}"
-#            debug "alias regex: ${alias_regex}"
-#            grep -q "${alias_regex}" $(get-home ${user})/.bashrc || { debug "alias ${alias} not in user ${user}'s .bashrc"; return 1; }
-#        done
-#    done
-}
-
-function setup-user-environment()
-{
-    debug-arguments $@
-
-    user=$1
-    [ "${user}" = "" ] && fail "${FUNCNAME[0]}: 'user' not provided"
-
-    local cursor=">"
-    [ "${user}" = "root" ] && cursor="#"
-
-    local PS1_content="export PS1=\"${user}@$(hostname)${cursor} \""
-
-    local bashrc_file="$(get-home ${user})/.bashrc"
-
-    if ! grep -q "${PS1_content}" ${bashrc_file}; then
-        echo "" >> ${bashrc_file}
-        echo "${PS1_content}" >> ${bashrc_file}
-        info "cursor configured in ${bashrc_file}"
-    else
-        debug "cursor already configured in ~${user}/.bashrc"
-    fi
-
-    echo "" >> ${bashrc_file}
-
-    local i=0
-    while [ ${i} -lt ${#ALIASES[*]} ]; do
-        local alias=${ALIASES[${i}]}
-        ((i++))
-
-        if ! grep -q "${alias}" ${bashrc_file}; then
-            echo "${alias}" >> ${bashrc_file}
-            info "${alias} configured in ${bashrc_file}"
-        else
-            debug "${alias} already configured in ~${user}/.bashrc"
-        fi
-    done
-
-    #
-    # setting ec2-api-tools - note that in order for these to work, we need the following:
-    #
-    # 1. NFS up and running (this is set within the basic overlay)
-    # 2. ec2-api-tools installed on the file server
-    # 3. java installed locally
-    #
-
-    if grep -q "^EC2_HOME=" ${bashrc_file}; then
-        debug "environment already configured for ec2-api-tools"
-    else
-        echo "" >> ${bashrc_file}
-        echo "export EC2_HOME=/nfs/opt/ec2-api-tools" >> ${bashrc_file}
-        echo "export PATH=\${PATH}:\${EC2_HOME}/bin" >> ${bashrc_file}
-        info "environment configured for ec2-api-tools"
-    fi
-}
-
-#
 # return 0 if the identity is set up by the fucntion, 1 if the identity was already configured and exits on failure
 #
 function setup-nfs-server-identity()
@@ -149,6 +44,7 @@ function install-authorized-keys()
     for i in $(ls ${env_authorized_keys_dir}); do
         key_name=$(install-authorized-key ${env_authorized_keys_dir}/${i} ec2-user) && \
             info "installed ${key_name} key into ec2-user's authorized_keys file"  || \
-            debug "${key_name} key is in ec2-user's authorized_keys already"
+            info "${key_name} key already in ec2-user's authorized_keys"
     done
 }
+

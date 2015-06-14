@@ -41,7 +41,6 @@ function link-to-ec2-host
 # User Environment Configuration
 #######################################################################################
 
-
 function setup-environment-private-key
 {
     local user_name=$1
@@ -215,37 +214,6 @@ function mount-main-storage
         chgrp ec2-user /data/bin
         chmod g+w /data/bin
     fi
-}
-
-
-#######################################################################################
-# NFS Installation
-#######################################################################################
-
-function setup-nfs-server
-{
-    install-package rpcbind
-    install-package nfs-utils
-
-    #
-    # share /data in /etc/exports
-    #
-
-    if ! grep -q "^/data " /etc/exports; then
-        echo "/data 172.31.16.0/20(rw,sync,no_root_squash,no_subtree_check)" >> /etc/exports && echo "declared /data in /etc/exports"
-    fi
-
-    if ! systemctl -q is-enabled nfs-server; then
-        systemctl enable nfs-server
-        echo "nfs server enabled for boot"
-    fi
-
-    if ! systemctl -q is-active nfs-server; then
-        service nfs-server start
-        echo "nfs server started"
-    fi
-
-    exportfs -a || { echo "failed to exportfs" 1>&2; exit 1; }
 }
 
 #######################################################################################

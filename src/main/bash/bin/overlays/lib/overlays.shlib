@@ -97,7 +97,6 @@ function process-overlay-arguments()
 #
 # insures that the overlay preconditions are met, or fail
 #
-
 function overlay-preconditions()
 {
     [ $(id -un) = "root" ] || fail "the $(basename $0) overlay is supposed to be executed as root, but it is executed as $(whoami)"

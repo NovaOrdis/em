@@ -1,14 +1,6 @@
 #!/bin/bash
 
 #
-# return 0 if the overlay was applied successfully and there is no need to apply it, 1 otherwise
-#
-function is-overlay-applied()
-{
-    return 1;
-}
-
-#
 # Successful installation exports a valid AMQ_HOME in the environment.
 #
 # return 0 if the installation modified state or 1 if not

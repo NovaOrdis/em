@@ -34,7 +34,6 @@ $(dirname $0)/java $@
 
 process-overlay-arguments $@
 overlay-preconditions
-is-overlay-applied && { info "$(basename $0) overlay already applied"; exit 0; }
 
 install-amq-broker
 configure-amq-security

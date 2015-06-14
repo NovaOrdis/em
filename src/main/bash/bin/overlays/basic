@@ -9,30 +9,14 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 # dependencies
 #
 
-# NONE
-# $(dirname $0)/environment-hostname $@
+$(dirname $0)/common $@
 
 #
-# The first overlay do deploy, and a dependency to pretty much everything else. It includes
-# * setting the hostname
-# * setting the NFS client
-# ...
-
-#
-# overlay
+# It requires 'common' and it sets up the nfs client and other basic regular instance stuff
 #
 
 process-overlay-arguments $@
 overlay-preconditions
-is-overlay-applied && { info "$(basename $0) overlay already applied"; exit 0; }
-
-set-hostname ${name} && info "hostname successfully set to ${name}" || debug "hostname ${name} already set"
-
-install-package zip
-install-package unzip
-
-setup-user-environment root
-setup-user-environment ec2-user
 
 # NFS
 
@@ -50,7 +34,6 @@ setup-nfs-client ${name} ${nfs_server_ip} ${nfs_server_name} && info "NFS client
 
 install-authorized-keys
 
-sudo-configure-requiretty off && info "removed requiretty from /etc/sudoers" || debug "requiretty already removed from /etc/sudoers"
 
 
 

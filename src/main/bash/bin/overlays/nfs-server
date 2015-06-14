@@ -1,0 +1,40 @@
+#!/bin/bash
+
+lib=$(dirname $0)/../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/overlays.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
+
+#
+# dependencies
+#
+
+$(dirname $0)/common $@
+
+#
+# Sets up the NFS server
+#
+
+#
+# overlay
+#
+
+process-overlay-arguments $@
+overlay-preconditions
+
+# NFS server
+
+create-shared-directory && info "created shared directory" || info "shared directory already created"
+setup-nfs-server && info "$(uname -n) setup as the enviornment's NFS server" || info "NFS server already set up"
+
+#nfs_server_name=$(get-nfs-server-name ${nfs_server_ip}) || exit 1
+#if [ "${nfs_server_name}" = "" ]; then
+#    setup-nfs-server-identity ${nfs_server_ip} && info "NFS server identity successfully configured" || debug "NFS server identity already configured"
+#    nfs_server_name=$(get-nfs-server-name ${nfs_server_ip})
+#fi
+#setup-nfs-client ${name} ${nfs_server_ip} ${nfs_server_name} && info "NFS client successfully configured" || info "NFS client already setup"
+
+
+
+
+

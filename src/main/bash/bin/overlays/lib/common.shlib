@@ -1,0 +1,66 @@
+#!/bin/bash
+
+#
+# aliases used both by is-overlay-applied() and setup-user-environment()
+#
+
+declare -a ALIASES
+
+ALIASES[0]="alias h='history'"
+ALIASES[1]="alias r='sudo su -'"
+ALIASES[2]="alias nfs='cd /nfs'"
+
+function setup-user-environment()
+{
+    debug-arguments $@
+
+    user=$1
+    [ "${user}" = "" ] && fail "${FUNCNAME[0]}: 'user' not provided"
+
+    local cursor=">"
+    [ "${user}" = "root" ] && cursor="#"
+
+    local PS1_content="export PS1=\"${user}@$(hostname)${cursor} \""
+
+    local bashrc_file="$(get-home ${user})/.bashrc"
+
+    if ! grep -q "${PS1_content}" ${bashrc_file}; then
+        echo "" >> ${bashrc_file}
+        echo "${PS1_content}" >> ${bashrc_file}
+        info "cursor configured in ${bashrc_file}"
+    else
+        debug "cursor already configured in ~${user}/.bashrc"
+    fi
+
+    echo "" >> ${bashrc_file}
+
+    local i=0
+    while [ ${i} -lt ${#ALIASES[*]} ]; do
+        local alias=${ALIASES[${i}]}
+        ((i++))
+
+        if ! grep -q "${alias}" ${bashrc_file}; then
+            echo "${alias}" >> ${bashrc_file}
+            info "${alias} configured in ${bashrc_file}"
+        else
+            debug "${alias} already configured in ~${user}/.bashrc"
+        fi
+    done
+
+    #
+    # setting ec2-api-tools - note that in order for these to work, we need the following:
+    #
+    # 1. NFS up and running (this is set within the basic overlay)
+    # 2. ec2-api-tools installed on the file server
+    # 3. java installed locally
+    #
+
+    if grep -q "^export EC2_HOME=" ${bashrc_file}; then
+        debug "environment already configured for ec2-api-tools"
+    else
+        echo "" >> ${bashrc_file}
+        echo "export EC2_HOME=/nfs/opt/ec2-api-tools" >> ${bashrc_file}
+        echo "export PATH=\${PATH}:\${EC2_HOME}/bin" >> ${bashrc_file}
+        info "environment configured for ec2-api-tools"
+    fi
+}

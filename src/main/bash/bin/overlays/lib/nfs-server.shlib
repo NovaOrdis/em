@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# return 0 if the directory was created, 1 if the directory already exists
+function create-shared-directory()
+{
+    local shared_directory=/nfs
+
+    [ -d ${shared_directory} ] && return 1
+
+    mkdir ${shared_directory} && return 0 || fail "failed to created ${shared_directory}"
+}

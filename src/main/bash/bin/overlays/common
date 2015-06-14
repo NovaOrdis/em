@@ -1,0 +1,37 @@
+#!/bin/bash
+
+lib=$(dirname $0)/../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/overlays.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
+
+#
+# dependencies
+#
+
+# NONE
+
+#
+# The first overlay do deploy, and a dependency to pretty much everything else. It includes common settings
+# that do not require NFS.
+#
+
+#
+# overlay
+#
+
+process-overlay-arguments $@
+overlay-preconditions
+
+set-hostname ${name} && info "hostname successfully set to ${name}" || info "hostname ${name} already set"
+install-package zip && info "zip successfully installed" || info "zip already installed"
+install-package unzip && info "unzip successfully installed" || info "unzip already installed"
+setup-user-environment root
+setup-user-environment ec2-user
+sudo-configure-requiretty off && info "removed requiretty from /etc/sudoers" || debug "requiretty already removed from /etc/sudoers"
+
+
+
+
+
+

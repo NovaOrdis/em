@@ -317,6 +317,39 @@ function setup-nfs-client()
     ${modified} && return 0 || return 1
 }
 
+function setup-nfs-server
+{
+    debug-arguments $@
+
+    local modified=false
+
+    install-package rpcbind && modified=true
+    install-package nfs-utils && modified=true
+
+    return 1
+
+    #
+    # share /data in /etc/exports
+    #
+
+    if ! grep -q "^/data " /etc/exports; then
+        echo "/data 172.31.16.0/20(rw,sync,no_root_squash,no_subtree_check)" >> /etc/exports && echo "declared /data in /etc/exports"
+    fi
+
+    if ! systemctl -q is-enabled nfs-server; then
+        systemctl enable nfs-server
+        echo "nfs server enabled for boot"
+    fi
+
+    if ! systemctl -q is-active nfs-server; then
+        service nfs-server start
+        echo "nfs server started"
+    fi
+
+    exportfs -a || { echo "failed to exportfs" 1>&2; exit 1; }
+}
+
+
 ########################################################################################################################
 # SSH functions
 ########################################################################################################################
