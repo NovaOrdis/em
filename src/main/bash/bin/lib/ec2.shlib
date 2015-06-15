@@ -129,13 +129,15 @@ function insure-access-keys-are-correctly-set-up-or-fail()
 # TODO: because is expensive, refactor it to accept multiple arguments and do the ec2-api-tool call and Java call only once
 #
 # may return empty string if the name cannot be resolved
-function get-private-ip()
+function get-internal-ip-for-name()
 {
     debug-arguments $@
+
     local name=$1
     [ -z "${name}" ] && fail "${FUNCNAME[0]}: 'name' not provided"
 
     insure-access-keys-are-correctly-set-up-or-fail
+
     local output
     output=$(ec2-describe-instances | jw ec2.grep_instances name=${name} --list private-ip) || fail "failed to ec2-describe-instances/parse"
     debug "output: ${output}"

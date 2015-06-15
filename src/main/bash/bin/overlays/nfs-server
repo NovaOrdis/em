@@ -6,6 +6,13 @@ lib=$(dirname $0)/lib/overlays.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib
 lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 
 #
+# configuration TODO: this must go somewhere else
+#
+
+local_shared_nfs_directory="/nfs"
+
+
+#
 # dependencies
 #
 
@@ -24,17 +31,15 @@ overlay-preconditions
 
 # NFS server
 
-create-shared-directory && info "created shared directory" || info "shared directory already created"
-setup-nfs-server && info "$(uname -n) setup as the enviornment's NFS server" || info "NFS server already set up"
+create-shared-directory ${local_shared_nfs_directory} && \
+    info "created local NFS shared directory ${local_shared_nfs_directory}" || \
+    info "local NFS shared directory ${local_shared_nfs_directory} already created"
 
-#nfs_server_name=$(get-nfs-server-name ${nfs_server_ip}) || exit 1
-#if [ "${nfs_server_name}" = "" ]; then
-#    setup-nfs-server-identity ${nfs_server_ip} && info "NFS server identity successfully configured" || debug "NFS server identity already configured"
-#    nfs_server_name=$(get-nfs-server-name ${nfs_server_ip})
-#fi
-#setup-nfs-client ${name} ${nfs_server_ip} ${nfs_server_name} && info "NFS client successfully configured" || info "NFS client already setup"
+setup-nfs-server ${local_shared_nfs_directory} && \
+    info "$(uname -n) configured as an NFS server" || \
+    info "NFS server already set up"
 
+populate-the-environment-directory
 
-
-
-
+# install the public keys from /nfs/environment/authorized-keys
+$(dirname $0)/authorized-keys $@

@@ -3,9 +3,150 @@
 # return 0 if the directory was created, 1 if the directory already exists
 function create-shared-directory()
 {
-    local shared_directory=/nfs
+    local local_shared_directory=$1
+    [ -z "${local_shared_directory}" ] && local_shared_directory=/nfs
 
-    [ -d ${shared_directory} ] && return 1
+    if [ ! -d ${local_shared_directory} ]; then
+        mkdir ${local_shared_directory} && \
+            debug "created local NFS shared directory ${local_shared_directory}" || \
+            fail "failed to create ${local_shared_directory}"
 
-    mkdir ${shared_directory} && return 0 || fail "failed to created ${shared_directory}"
+        chgrp ec2-user ${local_shared_directory} && \
+            debug "changed group ownership of ${local_shared_directory} to ec2-user" || \
+            fail "failed to change group ownership of ${local_shared_directory} to ec2-user"
+
+        local permissions="g+rwx"
+        chmod ${permissions} ${local_shared_directory} && \
+            debug "changed ${local_shared_directory} group permissions to ${permissions}" || \
+            fail "failed to change ${local_shared_directory} group permissions to ${permissions}"
+
+        return 0
+    else
+        debug "local NFS shared directory ${local_shared_directory} already created"
+        return 1
+    fi
+}
+
+#
+# return 0 if the state was changed, 1 otherwise
+#
+function populate-the-environment-directory()
+{
+    local modified=false
+
+    local local_shared_directory=$1
+    [ -z "${local_shared_directory}" ] && local_shared_directory=/nfs
+
+    #
+    # create the environment configuration directory
+    #
+
+    local environment_dir=${local_shared_directory}/environment
+
+    if [ -d ${environment_dir} ]; then
+        info "${environment_dir} already created"
+    else
+        mkdir ${environment_dir} && info "created the environment directory ${environment_dir}" || fail "failed to create ${environment_dir}"
+        modified=true
+    fi
+
+    #
+    # create the environment configuration file and some initial content
+    #
+
+    local environment_configuration_file=${environment_dir}/environment.conf
+
+    if [ -f ${environment_configuration_file} ]; then
+        info "${environment_configuration_file} already exists"
+    else
+        (cat << EOF
+#
+# The environment configuration
+#
+
+repository=/nfs/environment/repository
+java_template=jdk-7u75-linux-x64.tar.gz
+amq_template=jboss-a-mq-6.1.0.redhat-379-r1-r1p3.zip
+
+EOF
+) > ${environment_configuration_file} && \
+        info "populated environment configuration file ${environment_configuration_file} with initial content" || \
+        fail "failed to write ${environment_configuration_file}"
+        modified=true
+    fi
+
+    #
+    # create the authorized-keys directory and populate it with initial content
+    #
+
+    local authorized_keys_dir=${environment_dir}/authorized-keys
+
+    if [ -d ${authorized_keys_dir} ]; then
+        info "${authorized_keys_dir} already created"
+    else
+        mkdir ${authorized_keys_dir} && info "created the authorized keys directory ${authorized_keys_dir}" || fail "failed to create ${authorized_keys_dir}"
+
+        #
+        # populate it with the public keys that come with the installation
+        #
+        cp $(dirname $0)/../../etc/*.pub ${authorized_keys_dir} && \
+            info "copied public keys into ${authorized_keys_dir}" || \
+            fail "failed to cp $(dirname $0)/../../etc/*.pub ${authorized_keys_dir}"
+
+        modified=true
+    fi
+
+    #
+    # create the shared repository
+    #
+
+    local shared_repository=${environment_dir}/repository
+
+    if [ -d ${shared_repository} ]; then
+        info "${shared_repository} already created"
+    else
+        mkdir ${shared_repository} && info "created the shared repository ${shared_repository}" || fail "failed to create ${shared_repository}"
+        modified=true
+    fi
+
+    #
+    # give the whole /nfs directory the right permissions
+    #
+
+    if ${modified}; then
+        chgrp -R ec2-user ${environment_dir} && \
+            debug "recursively changed group ownership of ${environment_dir} to ec2-user" || \
+            fail "failed to change group ownership of ${environment_dir} to ec2-user"
+
+        local permissions="g+rw"
+        chmod -R ${permissions} ${environment_dir} && \
+            debug "recursively changed ${environment_dir} group permissions to ${permissions}" || \
+            fail "failed to change ${environment_dir} group permissions to ${permissions}"
+    fi
+
+    #
+    # create the "environment-wide" /nfs/opt directory. This is where we install applications that are available
+    # across the environment
+    #
+
+    local nfs_opt_dir=${local_shared_directory}/opt
+
+    if [ -d ${nfs_opt_dir} ]; then
+        info "${nfs_opt_dir} already created"
+    else
+        mkdir ${nfs_opt_dir} && info "created the environment wide 'opt' ${nfs_opt_dir}" || fail "failed to create ${nfs_opt_dir}"
+
+        chgrp ec2-user ${nfs_opt_dir} && \
+            debug "changed group ownership of ${nfs_opt_dir} to ec2-user" || \
+            fail "failed to change group ownership of ${nfs_opt_dir} to ec2-user"
+
+        local permissions="g+rw"
+        chmod ${permissions} ${nfs_opt_dir} && \
+            debug "changed ${nfs_opt_dir} group permissions to ${permissions}" || \
+            fail "failed to change ${nfs_opt_dir} group permissions to ${permissions}"
+
+        modified=true
+    fi
+
+    ${modified} && return 0 || return 1
 }

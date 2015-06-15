@@ -22,6 +22,10 @@ function read-bootstrap-configuration()
     [ -f ${bootstrap_conf_file} ] && . ${bootstrap_conf_file} || warn "bootstrap configuration file ${bootstrap_conf_file} not found"
 }
 
+########################################################################################################################
+# local (user-specific) configuration tools
+########################################################################################################################
+
 #
 # function reads user-specific configuration. A side effect is creating the user-specific em directory (~/.ec) and
 # the internal directory structure
@@ -42,6 +46,69 @@ function read-user-configuration()
     fi
 
     # TODO - read configuration
+}
+
+#
+# returns the NFS server internal IP as stored in the local configuration, or an empty string if the configuration
+# file does not exist or it was not updated (environment's NFS server has not been built with the nfs-server overlay
+# yet.
+#
+function get-nfs-server-ip-from-local-config()
+{
+    debug-arguments $@
+    local local_config_file=$1
+
+    [ -z "${local_config_file}" ] && local_config_file=${HOME}/.em/em.conf
+
+    if [ ! -f ${local_config_file} ]; then
+        debug "local configuration file ${local_config_file} not found"
+        echo ""
+        return 0;
+    fi
+
+    debug "local configuration file: ${local_config_file}"
+
+    (. ${local_config_file}; echo ${nfs_server_internal_ip})
+}
+
+#
+# It creates the local config file (${HOME}/.em/em.conf) if it does not exist.
+#
+function update-nfs-server-ip-in-local-config()
+{
+    debug-arguments $@
+
+    local nfs_server_internal_ip=$1
+    local local_config_file=$2
+
+    [ -z "${nfs_server_internal_ip}" ] && fail "${FUNCNAME[0]}: 'nfs_server_internal_ip' not specified"
+    [ -z "${local_config_file}" ] && local_config_file=${HOME}/.em/em.conf
+
+    if [ ! -f ${local_config_file} ]; then
+        touch ${local_config_file} && debug "local configuration file ${local_config_file} not found, we had to create it" || \
+            fail "failed to create local configuration file ${local_config_file}"
+    fi
+
+    if grep -q "^nfs_server_internal_ip=" ${local_config_file}; then
+
+        if grep -q "^nfs_server_internal_ip=${nfs_server_internal_ip}" ${local_config_file}; then
+            debug "nfs_server_internal_ip already set in ${local_config_file}"
+            return 1
+        fi
+
+        # declaration for a different value exists, update it
+        if replace-regex "^nfs_server_internal_ip=.*$" "nfs_server_internal_ip=${nfs_server_internal_ip}" ${local_config_file}; then
+            debug "updated nfs_server_internal_ip definition in ${local_config_file}"
+        else
+            fail "failed to update nfs_server_internal_ip in ${local_config_file}"
+        fi
+    else
+        # declaration does not exist, append it
+        echo "" >> ${local_config_file}
+        echo "nfs_server_internal_ip=${nfs_server_internal_ip}" >> ${local_config_file} && \
+            debug "added nfs_server_internal_ip=${nfs_server_internal_ip} to ${local_config_file}" || \
+            fail "failed to add nfs_server_internal_ip=${nfs_server_internal_ip} to ${local_config_file}"
+    fi
 }
 
 ########################################################################################################################

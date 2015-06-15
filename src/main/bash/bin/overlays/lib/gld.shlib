@@ -42,12 +42,12 @@ function update-etc-hosts-with-potential-servers()
     while [ -n "$1" ]; do
         local name=$1
         shift
-        local private_ip=$(get-private-ip ${name})
-        if [ -z "${private_ip}" ]; then
+        local internal_ip=$(get-internal-ip-for-name ${name})
+        if [ -z "${internal_ip}" ]; then
             warn "host ${name} is not known to the environment"
             continue;
         fi
-        update-etc-hosts ${name} ${private_ip} && info "added ${name}(${private_ip}) to /etc/hosts"
+        update-etc-hosts ${name} ${internal_ip} && info "added ${name}(${internal_ip}) to /etc/hosts"
     done
 
 }

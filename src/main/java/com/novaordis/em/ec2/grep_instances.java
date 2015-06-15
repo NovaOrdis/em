@@ -19,8 +19,14 @@ import java.util.List;
 import java.util.StringTokenizer;
 
 /**
- * Parses the Amazon EC2 'ec2-describe-instances' command output and re-outputs the result according to the
- * "--output" flag specified on command line.
+ * Parses the Amazon EC2 'ec2-describe-instances' command output and re-outputs the result according to the output
+ * format (--list, --table, etc.) specified as part of the argument list.
+ *
+ * If --list is used, the output is a space separated list of touples. The elements in a touple are separated by colons
+ * (:). For example, if "--list name:id" is used, the result is "f01:i-db0ab82d b01:i-55397ea3 b02:i-fe014408". If a
+ * touple element is not available, it is represented as "N/A".
+ *
+ * If --table is used TODO
  *
  * Usage:
  *

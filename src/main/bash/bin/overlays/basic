@@ -21,8 +21,13 @@ overlay-preconditions
 # NFS
 
 nfs_server_name=$(get-nfs-server-name ${nfs_server_ip}) || exit 1
+
 if [ "${nfs_server_name}" = "" ]; then
-    setup-nfs-server-identity ${nfs_server_ip} && info "NFS server identity successfully configured" || debug "NFS server identity already configured"
+
+    setup-nfs-server-identity ${nfs_server_ip} && \
+        info "NFS server identity successfully configured" || \
+        debug "NFS server identity already configured"
+
     nfs_server_name=$(get-nfs-server-name ${nfs_server_ip})
 fi
 

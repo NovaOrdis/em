@@ -62,11 +62,8 @@ function get-home()
 
 function get-home-dir
 {
-
     echo "${home_dir}"
 }
-
-
 
 ########################################################################################################################
 # hostname functions
@@ -269,8 +266,9 @@ function setup-nfs-client()
     local nfs_server_ip=$2
     local nfs_server_name=$3
     local etc_fstab=$4 # optional
+
     [ "${etc_fstab}" = "" ] && etc_fstab=/etc/fstab
-    [ -f ${etc_fstab} ] || fail "${FUNCNAME[0]}: ${etc_fstab} not fournd"
+    [ -f ${etc_fstab} ] || fail "${FUNCNAME[0]}: ${etc_fstab} not found"
 
     local modified=false
 
@@ -281,6 +279,7 @@ function setup-nfs-client()
     install-package nfs-utils && modified=true
 
     local mount_point=/nfs
+
     if [ -d ${mount_point} ]; then
         debug "mount point ${mount_point} already exists"
     else
@@ -289,26 +288,35 @@ function setup-nfs-client()
     fi
 
     local line
-    line=$(grep "/data[ \t]*/nfs" ${etc_fstab})
+    line=$(grep ":/nfs[ \t]*/nfs" ${etc_fstab})
     debug "mount line: ${line}"
-    if [ "${line}" != "" ]; then
-        # already setup
-        local etc_fstab_nfs_server_name=${line%%:*}
-        [ "${etc_fstab_nfs_server_name}" = "${nfs_server_name}" ] && \
-            debug "${etc_fstab} already configured, it contains a mount from ${etc_fstab_nfs_server_name}" || \
-            fail "the name of the file server already configured in ${etc_fstab} (${etc_fstab_nfs_server_name}) is different from the server we're about to configure (${nfs_server_name})"
-    else
+
+    if [ "${line}" = "" ]; then
         # needs setting up
-        echo "${nfs_server_name}:/data /nfs nfs _netdev,bg 0 0" >> ${etc_fstab} && modified=true || fail "failed to update  ${etc_fstab}"
+        line="${nfs_server_name}:/nfs /nfs nfs _netdev,bg 0 0"
+        echo "${line}"  >> ${etc_fstab} && \
+            { modified=true; debug "added '${line}' to ${etc_fstab}"; } || \
+            fail "failed to update ${etc_fstab}"
+    else
+        # already setup
+        debug "mount line already setup in ${etc_fstab}: '${line}'"
+        local etc_fstab_nfs_server_name=${line%%:*}
+        if [ "${etc_fstab_nfs_server_name}" = "${nfs_server_name}" ]; then
+            debug "${etc_fstab} already configured, it contains a mount from ${etc_fstab_nfs_server_name}"
+        else
+            fail "the name of the file server already configured in ${etc_fstab} (${etc_fstab_nfs_server_name}) is different from the server we're about to configure (${nfs_server_name})"
+        fi
     fi
 
-    mount -a && debug "successfully executed mount -a"
+    debug "mounting the NFS file system ..."
+    mount -a && debug "successfully executed mount -a" || fail "failed to moutn the NFS file system"
 
     #
     # we check NFS is functional by checking whether the environment configuration file is accessible
     #
 
-    [ "${ENVIRONMENT_CONFIGURATION_FILE}" = "" ] && fail "the ENVIRONMENT_CONFIGURATION_FILE global variable not set, which means the overlay has not been initialized properly"
+    [ "${ENVIRONMENT_CONFIGURATION_FILE}" = "" ] && \
+        fail "the ENVIRONMENT_CONFIGURATION_FILE global variable not set, which means the overlay has not been initialized properly"
 
     [ -f ${ENVIRONMENT_CONFIGURATION_FILE} ] && \
         debug "we are able to access ${ENVIRONMENT_CONFIGURATION_FILE} which means NSF client is correctly set" || \
@@ -317,38 +325,69 @@ function setup-nfs-client()
     ${modified} && return 0 || return 1
 }
 
+#
+# implementation is idempotent
+#
+# return 0 if the state was changed, 1 if not
+#
 function setup-nfs-server
 {
     debug-arguments $@
+
+    local local_shared_directory=$1
+    local etc_exports_file=$2
+    [ -z "${local_shared_directory}" ] && local_shared_directory="/nfs"
+    [ -z "${etc_exports_file}" ] && etc_exports_file="/etc/exports"
 
     local modified=false
 
     install-package rpcbind && modified=true
     install-package nfs-utils && modified=true
 
-    return 1
+    #
+    # shared directory is supposed to be already created
+    #
+    [ -d ${local_shared_directory} ] || fail "${local_shared_directory} does not exist"
 
     #
-    # share /data in /etc/exports
+    # share /nfs in /etc/exports
     #
 
-    if ! grep -q "^/data " /etc/exports; then
-        echo "/data 172.31.16.0/20(rw,sync,no_root_squash,no_subtree_check)" >> /etc/exports && echo "declared /data in /etc/exports"
+    local eth0_ip
+
+    eth0_ip=$(get-primary-ip) || exit 1
+
+    if grep -q "^${local_shared_directory} " ${etc_exports_file}; then
+        info "${etc_exports_file} already configured"
+    else
+        local line="${local_shared_directory} ${eth0_ip}/20(rw,sync,no_root_squash,no_subtree_check)"
+        echo "${line}" >> ${etc_exports_file} && \
+            info "declared ${local_shared_directory} in ${etc_exports_file}" || \
+            fail "failed to modify ${etc_exports_file}"
+        modified=true
     fi
 
-    if ! systemctl -q is-enabled nfs-server; then
-        systemctl enable nfs-server
-        echo "nfs server enabled for boot"
+    if systemctl -q is-enabled nfs-server; then
+        info "NFS server already enabled to start at boot"
+    else
+        systemctl enable nfs-server && \
+            info "enabled NFS server to start at boot" ||
+            fail "failed to enable NFS startup at boot"
+        modified=true
     fi
 
-    if ! systemctl -q is-active nfs-server; then
-        service nfs-server start
-        echo "nfs server started"
-    fi
+#    if ! systemctl -q is-active nfs-server; then
+#        if service nfs-server start; then
+#            info "NFS server started"
+#        else
+#            fail "failed to start the NFS server"
+#        fi
+#    fi
+#
+#    exportfs -a || fail "failed to exportfs"
 
-    exportfs -a || { echo "failed to exportfs" 1>&2; exit 1; }
+    ${modified} && return 0 || return 1
 }
-
 
 ########################################################################################################################
 # SSH functions
@@ -357,7 +396,7 @@ function setup-nfs-server
 #
 # return 0 if tke file is modified and the key is installed or 1 if the key is already in the file
 #
-# echoes the key's owner at stdout
+# echoes the key's owner at stdout (or the file name if the key owner is not specified in the file)
 #
 function install-authorized-key()
 {
@@ -380,19 +419,22 @@ function install-authorized-key()
     key=$(cat ${key_file} | awk '{print $2}') || fail "cannot identify the key"
     owner=$(cat ${key_file} | awk '{print $3}') || fail "cannot identify the owner"
 
+    if [ "${owner}" = "" ]; then
+        owner=$(basename ${key_file} .pub)
+    fi
+
     debug "type/owner: ${type}/${owner}"
 
     echo "${owner}"
 
     if grep -q "${key}" ${authorized_keys_file}; then
-        # the key is in the file already
+        debug "the key ${owner} is in ${authorized_keys_file} already"
         return 1
     fi
 
     cat ${key_file} >> ${authorized_keys_file} && \
         { debug "wrote key ${type}/${owner} into ${authorized_keys_file}"; return 0; } || \
         fail "failed to write key ${type}/${owner} into ${authorized_keys_file}"
-
 }
 
 ########################################################################################################################

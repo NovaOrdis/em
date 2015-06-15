@@ -3,6 +3,7 @@
 lib=$(dirname $0)/../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/../lib/ec2.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 
 help=false
@@ -88,7 +89,62 @@ function main()
 
     [ -d ${tar_root}/lib ] || fail "${tar_root}/lib not found - you need probably running from a non-standard location"
 
+    debug "creating the tar file to be transferred on the target instance ..."
+
     (cd ${tar_root}; tar cf${tar_verbose} - bin/overlays bin/lib etc lib > ${tar_file}) || fail "failed to create ${tar_file}"
+
+    #
+    # creating a temporary "etc" directory to store various configuration pieces
+    #
+
+    local temporary_etc_directory
+    temporary_etc_directory=$(unique-file) || fail "failed to get a temporary directory"
+    temporary_etc_directory=${temporary_etc_directory}/etc
+    mkdir -p ${temporary_etc_directory} || fail "failed to mkdir ${temporary_etc_directory}"
+
+    #
+    # store the environment provisioning key
+    #
+
+    local key_file=${HOME}/.ssh/em-provisioning-private-key.pem
+
+    cp ${key_file} ${temporary_etc_directory} && \
+        debug "copied ${key_file} into ${temporary_etc_directory}" || \
+        fail "failed to copy ${key_file} into ${temporary_etc_directory}"
+
+    chmod go-rwx ${temporary_etc_directory}/$(basename ${key_file}) && \
+        debug "adjusted permissions on ${temporary_etc_directory}/$(basename ${key_file})" || \
+        fail "failed to adjust permissions on ${temporary_etc_directory}/$(basename ${key_file})"
+
+    #
+    # store the public key of the account operating em - we only need this for the nfs-server overlay
+    #
+
+    if [ "${overlay}" = "nfs-server" ]; then
+
+        local public_key_file_source=${HOME}/.ssh/id_rsa.pub
+
+        [ ! -f ${public_key_file_source} ] && fail "public key file ${public_key_file} not found"
+
+        local public_key_file_target
+        public_key_file_target=${temporary_etc_directory}/$(whoami)@$(uname -n).pub
+
+        cp ${public_key_file_source} ${public_key_file_target} && \
+            debug "copied the public key of the em operator ${public_key_file_source} to ${public_key_file_target}" || \
+            fail "failed to cp ${public_key_file_source} ${public_key_file_target}"
+    fi
+
+    #
+    # append the content of the temporary etc directory to the tar
+    #
+
+    debug "appending the content of the temporary etc directory ${temporary_etc_directory} ..."
+
+    (cd $(dirname ${temporary_etc_directory}); tar -r${tar_verbose} -f ${tar_file} etc/*) && \
+        debug "added the content of the temporary etc directory ${temporary_etc_directory} to ${tar_file}" || \
+        fail "failed to the content of the temporary etc directory ${temporary_etc_directory} to ${tar_file}"
+
+    rm -rf $(dirname ${temporary_etc_directory}) && debug "deleted $(dirname ${temporary_etc_directory})"
 
     gzip ${tar_file}
 
@@ -111,13 +167,14 @@ function main()
     # execute the overlay on the target instance
     #
 
-    nfs_server_ip=172.31.25.44
+    local nfs_server_internal_ip
+    nfs_server_internal_ip=$(get-nfs-server-ip-from-local-config) || fail "failed to get the NFS server internal IP from the local configuration"
 
     [ -n "${EC2_URL}" ] && ec2_url_arg="--ec2-url ${EC2_URL}" || debug "EC2_URL not found in environment. This means overlay ec2-api-tools will not work correctly on remote instances."
     [ -n "${AWS_SECRET_KEY}" ] && aws_secret_key_arg="--aws-secret-key ${AWS_SECRET_KEY}" || debug "AWS_SECRET_KEY not found in environment. This means overlay ec2-api-tools will not work on remote instances."
     [ -n "${AWS_ACCESS_KEY}" ] && aws_access_key_arg="--aws-access-key ${AWS_ACCESS_KEY}" || debug "AWS_ACCESS_KEY not found in environment. This means overlay ec2-api-tools will not work on remote instances."
 
-    local remote_command="cd /tmp; [ ! -d ./em ] && mkdir em; cd em; tar xfz${tar_verbose} ../$(basename ${gzip_file}); cd ..; rm ${gzip_file}; export EM_HOME=/tmp/em; ./em/bin/overlays/${overlay} $(serialize-common-arguments) --instance-name ${name} ${aws_access_key_arg} ${aws_secret_key_arg} ${ec2_url_arg} --nfs-server-ip ${nfs_server_ip}"
+    local remote_command="cd /tmp; [ ! -d ./em ] && mkdir em; cd em; tar xfz${tar_verbose} ../$(basename ${gzip_file}); cd ..; rm ${gzip_file}; export EM_HOME=/tmp/em; ./em/bin/overlays/${overlay} $(serialize-common-arguments) --instance-name ${name} ${aws_access_key_arg} ${aws_secret_key_arg} ${ec2_url_arg} --nfs-server-ip ${nfs_server_internal_ip}"
     local ssh_sudo_wrapper="ssh -i $(get-instance-provisioning-private-key-file) -t ${ssh_url} sudo -n bash -c \"${remote_command}\""
 
     # mask --aws-secret-key, if present
@@ -126,6 +183,13 @@ function main()
     ${ssh_sudo_wrapper} || fail "remote ${name} (${ssh_url}) command failed"
 
     rm ${gzip_file} && debug "${gzip_file} removed"
+
+    # the nfs-server overlay is special, in that, if successful, the "nfs-server" overlay should modify local state
+    if [ "${overlay}" = "nfs-server" ]; then
+        local nfs_server_internal_ip
+        nfs_server_internal_ip=$(get-internal-ip-for-name ${name}) || fail "failed to get the internal IP address for '${name}'"
+        update-nfs-server-ip-in-local-config ${nfs_server_internal_ip}
+    fi
 }
 
 main $@

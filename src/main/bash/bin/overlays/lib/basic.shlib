@@ -15,9 +15,14 @@ function setup-nfs-server-identity()
     local modified=false
 
     # ssh into the NFS server and get the hostname
-    local environment_identity=$(dirname $0)/../../etc/environment-identity
-    [ -f ${environment_identity} ] || fail "environment identity file ${environment_identity} not found or not readable"
-    nfs_server_hostname=$(ssh -i ${environment_identity} ec2-user@${nfs_server_ip} "hostname") || fail "failed to ssh into ec2-user@${nfs_server_ip}"
+    local key_file=$(dirname $0)/../../etc/em-provisioning-private-key.pem
+
+    [ -f ${key_file} ] || fail "private key file ${key_file} not found or not readable"
+
+    debug "ssh-ing into the NFS server ec2-user@${nfs_server_ip} with key file ${key_file} to get the hostname ..."
+
+    nfs_server_hostname=$(ssh -i ${key_file} ec2-user@${nfs_server_ip} "hostname") || fail "failed to ssh into ec2-user@${nfs_server_ip}"
+
     debug "nfs_server_hostname: ${nfs_server_hostname}"
 
     # update /etc/hosts with the NFS server name/IP address
@@ -30,7 +35,7 @@ function setup-nfs-server-identity()
 # Install authorized keys for external users. If gets the keys from the environment's "authorized-keys" directory and
 # installs them into ec2-user's authorized_keys file
 #
-# This step requires NFS
+# This step requires NFS (unless it's done locally on the NFS server)
 #
 function install-authorized-keys()
 {

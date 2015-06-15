@@ -16,8 +16,6 @@ lib=$(dirname $0)/lib/basic.shlib; [ -f ${lib} ] && . ${lib} # the behavior we n
 
 process-overlay-arguments $@
 overlay-preconditions
-# we run it every time, we don't check whether is applied or not
-# is-overlay-applied
 
 install-authorized-keys
 
