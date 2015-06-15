@@ -15,7 +15,7 @@ function install-amq-broker()
     repository=$(get-environment-configuration "repository") || exit 1
     [ -d ${repository} ] || fail "repository directory ${repository} not accessible"
     local amq_template_file=${repository}/${amq_template}
-    [ -f ${amq_template_file} ] || fail "AMQ template file ${amq_template_file} cannot be accessed"
+    [ -f ${amq_template_file} ] || fail "AMQ template file ${amq_template_file} not found"
 
     if [ -h /opt/amq ]; then
         debug "AMQ already installed"

@@ -20,7 +20,7 @@ function install-java()
     [ -d ${repository} ] || fail "repository directory ${repository} not accessible"
 
     local f=${repository}/${java_template}
-    [ -f ${f} ] || fail "java template file ${f} cannot be accessed"
+    [ -f ${f} ] || fail "java template file ${f} not found"
 
     info "installing java ..."
     debug "extracting java from ${f} into /opt ..."
