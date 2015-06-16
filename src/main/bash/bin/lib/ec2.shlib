@@ -131,6 +131,7 @@ function insure-access-keys-are-correctly-set-up-or-fail()
 # TODO 2: this is executed on instances, so Amazon EC2 CLI must be made availabe on instances
 #
 # may return empty string if the name cannot be resolved
+#
 function get-internal-ip-for-name()
 {
     debug-arguments $@

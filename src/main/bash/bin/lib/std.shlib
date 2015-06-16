@@ -28,9 +28,27 @@ function fail
 
 function debug-arguments
 {
-    ${verbose} && echo "${FUNCNAME[1]}($@)" 1>&2;
-    return 0
+    #${verbose} && echo "${FUNCNAME[1]}($@)" 1>&2;
+    # we need a more elaborate debug function because we need to mask some arguments
+    local line
+    if ${verbose}; then
+        while [ -n "$1" ]; do
+            local arg=$1
+            if [ "--aws-secret-key" = "${arg}" ]; then
+                shift
+                arg="--aws-secret-key ***"
+            fi
+            if [ -z "${line}" ]; then
+                line=${arg}
+            else
+                line="${line} ${arg}"
+            fi
+            shift
+        done
+        echo "${FUNCNAME[1]}(${line})" 1>&2;
+    fi
 
+    return 0
 }
 
 #
@@ -321,6 +339,22 @@ function replace-regex()
 }
 
 ########################################################################################################################
-# Data format verification
+#
 ########################################################################################################################
 
+#
+# returns the top level directory in the given zip archive or fails
+#
+function get-top-level-dir-in-zip-archive
+{
+    debug-arguments $@
+
+    local zip_file=$1
+    [ "${zip_file}" = "" ] && fail "'zip_file' not provided"
+    [ -f ${zip_file} ] || fail "zip file ${zip_file} does not exist"
+
+    local result
+    result=$(unzip -l ${zip_file} | grep -v Archive | grep -v Length | grep -v "\-\-\-" | head -1 | awk '{print $4}') || fail "failed to read directory name from zip file ${zip_file}"
+    [ -z "${result}" ] && fail "read empty top directory name from zip file ${zip_file}"
+    echo ${result}
+}

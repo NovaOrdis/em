@@ -29,14 +29,14 @@ function install-amq-broker()
     info "extracting ${amq_template_file} into /opt ..."
     (cd /opt; unzip ${unzip_quiet} ${amq_template_file}) && info "extracted ${amq_template_file} into /opt" || fail "failed to extract ${amq_template_file} into /opt"
 
-    local dir_name
-    dir_name=$(unzip -l ${amq_template_file} | grep -v Archive | grep -v Length | grep -v "\-\-\-" | head -1 | awk '{print $4}') || fail "failed to read directory name from zip archive"
-    [ -z "${dir_name}" ] && fail "read empty directory name from zip archive"
-    dir_name="/opt/${dir_name}"
-    debug "dir_name: ${dir_name}"
-    [ -d ${dir_name} ] || fail "${dir_name} not a directory"
+    local top_level_dir_in_archive
+    top_level_dir_in_archive=$(get-top-level-dir-in-zip-archive ${amq_template_file}) || fail "failed to get the top level dir from archive ${amq_template_file}"
 
-    (cd /opt; ln -s $(basename ${dir_name}) amq) && info "linked $(basename ${dir_name}) to /opt/amq" || fail "failed to link $(basename ${dir_name}) to /opt/amq"
+    top_level_dir_in_archive="/opt/${top_level_dir_in_archive}"
+    debug "dir_name: ${top_level_dir_in_archive}"
+    [ -d ${top_level_dir_in_archive} ] || fail "${top_level_dir_in_archive} not a directory"
+
+    (cd /opt; ln -s $(basename ${top_level_dir_in_archive}) amq) && info "linked $(basename ${top_level_dir_in_archive}) to /opt/amq" || fail "failed to link $(basename ${top_level_dir_in_archive}) to /opt/amq"
 
     [ ! -d /opt/amq/data/log ] && \
         { mkdir /opt/amq/data/log && info "created log directory /opt/amq/data/log" || fail "failed to create log directory /opt/amq/data/log"; }
@@ -328,6 +328,8 @@ function configure-amq-logging()
 
 function configure-amq-permissions()
 {
+    debug-arguments $@
+
     [ -z "${AMQ_HOME}" ] && fail "AMQ_HOME not set"
     [ -h "${AMQ_HOME}" ] || fail "AMQ_HOME ${AMQ_HOME} not a valid link"
     [ -d "${AMQ_HOME}/bin" ] || fail "AMQ_HOME/bin ${AMQ_HOME}/bin not a valid directory"
@@ -382,8 +384,11 @@ function update-etc-hosts-with-other-brokers()
     local name=$(hostname)
 
     for b in ${brokers}; do
+
         [ "${b}" = "${name}" ] && continue;
+
         local internal_ip=$(get-internal-ip-for-name ${b}) || fail "failed the get IP address for ${b}"
+
         if [ -z "${internal_ip}" ]; then
             warn "host name ${b} not known to the enviornment, make sure to update /etc/host on ${name} with its IP address after it is created"
         else

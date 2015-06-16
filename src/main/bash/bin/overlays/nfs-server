@@ -41,5 +41,10 @@ setup-nfs-server ${local_shared_nfs_directory} && \
 
 populate-the-environment-directory
 
+# install Amazon CLI - implies that /nfs/opt was created
+install-amazon-cli
+
 # install the public keys from /nfs/environment/authorized-keys
 $(dirname $0)/authorized-keys $@
+
+

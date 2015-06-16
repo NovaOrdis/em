@@ -37,7 +37,7 @@ function install-eap
     #
 
     local eap_top_dir_name
-    eap_top_dir_name=$(get-top-eap-dir-from-archive ${eap_archive_path}) || exit 1
+    eap_top_dir_name=$(get-top-level-dir-in-zip-archive ${eap_archive_path}) || exit 1
 
     local eap_dir
     eap_dir=/opt/${eap_top_dir_name}
@@ -179,29 +179,6 @@ function install-eap
     fi
 
 }
-
-function get-top-eap-dir-from-archive
-{
-    local eap_archive_file=$1
-    debug "get-top-eap-dir-from-archive(eap_archive_file=${eap_archive_file})"
-    [ "${eap_archive_file}" = "" ] && { echo "'eap_archive_file' not specified" 1>&2; exit 1; }
-    [ -f ${eap_archive_file} ] || { echo "'eap_archive_file' ${eap_archive_file} does not exist" 1>&2; exit 1; }
-
-    local found=false;
-    local s;
-
-    s=$(unzip -l ${eap_archive_file} | \
-        while read line; do \
-            if ${found}; then { echo "${line}"; break; }; \
-            elif echo ${line} | grep -q "\-\-\-\-\-"; then found=true; fi; done;) || exit 1
-
-    s=$(echo ${s} | sed -e 's/^.* \(.*\)\/$/\1/')
-
-    [ "${s}" = "" ] && { echo "top eap directory not found" 1>&2; exit 1; }
-
-    echo ${s}
-}
-
 
 # return the absolute path of the sole A-MQ directory, or empty string if no A-MQ directory
 # is found, or fail if more than one A-MQ directory is found

@@ -56,7 +56,7 @@ function setup-user-environment()
     #
 
     if grep -q "^export EC2_HOME=" ${bashrc_file}; then
-        debug "environment already configured for ec2-api-tools"
+        debug "${user} environment already configured for ec2-api-tools"
     else
         echo "" >> ${bashrc_file}
         echo "export EC2_HOME=/nfs/opt/ec2-api-tools" >> ${bashrc_file}

@@ -116,11 +116,11 @@ function main()
         debug "adjusted permissions on ${temporary_etc_directory}/$(basename ${key_file})" || \
         fail "failed to adjust permissions on ${temporary_etc_directory}/$(basename ${key_file})"
 
-    #
-    # store the public key of the account operating em - we only need this for the nfs-server overlay
-    #
-
     if [ "${overlay}" = "nfs-server" ]; then
+
+        #
+        # store the public key of the account operating em - we only need this for the nfs-server overlay
+        #
 
         local public_key_file_source=${HOME}/.ssh/id_rsa.pub
 

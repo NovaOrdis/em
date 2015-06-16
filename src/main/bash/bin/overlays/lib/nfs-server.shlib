@@ -32,8 +32,9 @@ function create-shared-directory()
 #
 function populate-the-environment-directory()
 {
-    local modified=false
+    debug-arguments $@
 
+    local modified=false
     local local_shared_directory=$1
     [ -z "${local_shared_directory}" ] && local_shared_directory=/nfs
 
@@ -144,6 +145,64 @@ EOF
         chmod ${permissions} ${nfs_opt_dir} && \
             debug "changed ${nfs_opt_dir} group permissions to ${permissions}" || \
             fail "failed to change ${nfs_opt_dir} group permissions to ${permissions}"
+
+        modified=true
+    fi
+
+    ${modified} && return 0 || return 1
+}
+
+#
+# return 0 if the state was changed, 1 otherwise
+#
+function install-amazon-cli()
+{
+    debug-arguments $@
+
+    local modified=false
+    local installation_dir=$1
+    [ -z "${installation_dir}" ] && installation_dir=/nfs/opt
+
+    if [ ! -d ${installation_dir} ]; then
+        mkdir -p ${installation_dir} && \
+            info "created ${installation_dir}" || \
+            fail "failed to create ${installation_dir}"
+        modified=true
+    fi
+
+    local amazon_cli_link=${installation_dir}/ec2-api-tools
+    if [ -h ${amazon_cli_link} ]; then
+        info "Amazon CLI tools already installed"
+    else
+        #
+        # download the Amazon CLI zip
+        #
+        local amazon_cli_url=http://s3.amazonaws.com/ec2-downloads/ec2-api-tools.zip
+        local target_dir=/tmp
+        (cd ${target_dir}; curl -sO ${amazon_cli_url}) && \
+            info "downloaded Amazon EC2 CLI tools from ${amazon_cli_url} into ${target_dir}" ||
+            fail "failed to download Amazon EC2 CLI tools from ${amazon_cli_url} into ${target_dir}"
+
+        #
+        # make sure the correct file has been downloaded
+        #
+
+        local source_zip_file=${target_dir}/ec2-api-tools.zip
+        local unzip_quiet_flag=""
+        ${verbose} && unzip_quiet_flag="-q"
+
+        unzip ${unzip_quiet_flag} -d ${installation_dir} ${source_zip_file} && \
+            debug "successfully unzipped ${source_zip_file} into ${installation_dir}" || \
+            fail "failed to unzip ${source_zip_file} into ${installation_dir}"
+
+        local top_dir
+        top_dir=$(get-top-level-dir-in-zip-archive ${source_zip_file}) || exit 1
+
+        debug "top_dir: ${top_dir}"
+
+        (cd ${installation_dir}; ln -s ./${top_dir} $(basename ${amazon_cli_link})) && \
+            info "linked $(basename ${amazon_cli_link}) to ${top_dir}" || \
+            fail "failed to link $(basename ${amazon_cli_link}) to ${top_dir}"
 
         modified=true
     fi
