@@ -188,8 +188,8 @@ function install-amazon-cli()
         #
 
         local source_zip_file=${target_dir}/ec2-api-tools.zip
-        local unzip_quiet_flag=""
-        ${verbose} && unzip_quiet_flag="-q"
+        local unzip_quiet_flag="-q"
+        ${verbose} && unzip_quiet_flag=""
 
         unzip ${unzip_quiet_flag} -d ${installation_dir} ${source_zip_file} && \
             debug "successfully unzipped ${source_zip_file} into ${installation_dir}" || \
