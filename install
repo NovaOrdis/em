@@ -81,13 +81,15 @@ echo "zip ok"
 ${zip_only} && exit 0
 
 cd /opt
-rm -rf em-* || fail "failed to rm"
+rm -rf em* || fail "failed to rm"
 
 cp ${project_home}/target/em-${version}.zip /opt || fail "failed to copy"
 
 cd /opt
 unzip em-${version}.zip  || fail "failed to unzip"
 rm em-${version}.zip || fail "failed to rm"
+
+ln -s ./em-${version} em
 
 echo "install ok"
 

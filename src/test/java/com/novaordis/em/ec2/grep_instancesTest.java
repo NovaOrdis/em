@@ -394,6 +394,21 @@ public class grep_instancesTest
         assertEquals(InetAddress.getByName("52.24.51.225"), instance3.getPublicIp());
     }
 
+    @Test
+    public void noInstances() throws Exception
+    {
+        BufferedReader br = new BufferedReader(new StringReader(""));
+
+        grep_instances p = new grep_instances(new String[0]);
+
+        p.parse(br);
+
+        br.close();
+
+        List<Instance> instances = p.getInstances();
+        assertTrue(instances.isEmpty());
+    }
+
     // Package protected -----------------------------------------------------------------------------------------------
 
     // Protected -------------------------------------------------------------------------------------------------------

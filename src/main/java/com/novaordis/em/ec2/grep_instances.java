@@ -275,6 +275,9 @@ public class grep_instances
 
     /**
      * Add the instance to the internal instance list if it satisfies the filters.
+     *
+     * The method should be prepared to deal with the situation when no instances are present in the environment. The
+     * method is presented with a "hollow" instance while the "instances" list is not initialized.
      */
     private void addWithFilter(Instance instance)
     {
@@ -297,8 +300,16 @@ public class grep_instances
 
         }
 
-        log.debug("filters accepted the instance " + instance);
-        instances.add(instance);
+        if (instances != null)
+        {
+            log.debug("filters accepted the instance " + instance);
+            instances.add(instance);
+        }
+        else
+        {
+            log.debug("no instances");
+            instances = new ArrayList<>();
+        }
     }
 
     private String filterToString()

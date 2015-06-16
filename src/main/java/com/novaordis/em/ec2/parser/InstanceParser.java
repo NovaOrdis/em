@@ -174,7 +174,10 @@ public class InstanceParser
 
         line = lines.get(INSTANCE);
 
-        parseInstance(line);
+        if (line != null)
+        {
+            parseInstance(line);
+        }
 
         complete = true;
     }
