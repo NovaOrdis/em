@@ -8,10 +8,7 @@ function main()
 
     debug "$(basename $0) command line arguments: $@"
 
-    echo ${version}
-    echo ${release_date}
-
-
+    echo "${version}, ${release_date}"
 }
 
 main $@

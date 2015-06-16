@@ -64,6 +64,16 @@ cp -r ${project_home}/src/main/bash/etc ./${zip_dir_name} || fail "failed to cop
 mkdir ./${zip_dir_name}/lib || fail "failed to create ./${zip_dir_name}/lib"
 cp ${project_home}/target/em-${version}.jar ./${zip_dir_name}/lib || fail "failed to copy"
 cp ${M2}/log4j/log4j/1.2.16/log4j-1.2.16.jar ./${zip_dir_name}/lib || fail "failed to copy"
+
+#
+# update version and release date
+#
+sed -e 's/^export version=NOT_RELEASED$/export version='"${version}"'/' ./${zip_dir_name}/bin/em > ./tmp.txt
+release_date=$(date +'%m\/%d\/%y')
+sed -e s'/^export release_date=NOT_RELEASED$/export release_date='"${release_date}"'/' ./tmp.txt > ./${zip_dir_name}/bin/em
+#sed -e 's/^export release_date=NOT_RELEASED$/export release_date='"${release_date}"'/'
+rm ./tmp.txt
+
 zip -r ./em-${version}.zip em-${version} || fail "failed to zip"
 
 echo "zip ok"
