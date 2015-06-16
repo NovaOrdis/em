@@ -1,9 +1,5 @@
 #!/bin/bash
 
-#
-# aliases used both by is-overlay-applied() and setup-user-environment()
-#
-
 declare -a ALIASES
 
 ALIASES[0]="alias h='history'"
