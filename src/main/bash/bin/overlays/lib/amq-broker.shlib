@@ -339,7 +339,7 @@ function configure-amq-permissions()
     chgrp -R ec2-user ${AMQ_HOME}/data && debug "chgrp -R ec2-user ${AMQ_HOME}/data"
     chmod -R g+w ${AMQ_HOME}/data && debug "chmod -R g+w ${AMQ_HOME}/data"
     chgrp -R ec2-user ${AMQ_HOME}/etc && debug "chgrp -R ec2-user ${AMQ_HOME}/etc"
-    chmod -R g+w ${AMQ_HOME}/etc && info "debug -R g+w ${AMQ_HOME}/etc"
+    chmod -R g+w ${AMQ_HOME}/etc && info "chmod -R g+w ${AMQ_HOME}/etc"
 
     info "${AMQ_HOME}, ${AMQ_HOME}/data, ${AMQ_HOME}/etc permissions configured"
 }
