@@ -357,4 +357,47 @@ function get-top-level-dir-in-zip-archive
     result=$(unzip -l ${zip_file} | grep -v Archive | grep -v Length | grep -v "\-\-\-" | head -1 | awk '{print $4}') || fail "failed to read directory name from zip file ${zip_file}"
     [ -z "${result}" ] && fail "read empty top directory name from zip file ${zip_file}"
     echo ${result}
+
+#
+# returns the absolute path of the given argument (either file or directory). The file
+# or directory presented as argument must exist on storage, otherwise the method fails
+#
+function get-absolute-path()
+{
+    local file_or_dir=$1
+    [ -z "${file_or_dir}" ] && { echo "get-absolute-path(): argument not provided" 1>&2; exit 1; }
+
+    # if absolute, return
+
+    if [ "${file_or_dir:0:1}" = "/" ]; then
+        # absolute path
+        if [ -f ${file_or_dir} -o -d ${file_or_dir} ]; then
+            echo ${file_or_dir}
+            return 0
+        else
+            echo "${file_or_dir} does not exist"
+            exit 1;
+        fi
+    fi
+
+    # relative
+    local file_name
+    local dir_name
+    if [ -f ${file_or_dir} ]; then
+        file_name=$(basename ${file_or_dir})
+        dir_name=$(dirname ${file_or_dir})
+    elif [ -d ${file_or_dir} ]; then
+        dir_name=${file_or_dir}
+    else
+        echo "${file_or_dir} does not exist"
+        exit 1;
+    fi
+
+    local absolute_dir
+    absolute_dir=$(cd ${dir_name}; pwd) || exit 1
+
+    local result=${absolute_dir}
+    [ -n "${file_name}" ] && result=${result}/${file_name}
+    echo "${result}"
+}
 }
