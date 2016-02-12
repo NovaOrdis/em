@@ -29,7 +29,7 @@
 #
 # --instance-name <name>               export name=<name>
 #
-# --mfs-server-ip <nfs_server_ip>      export nfs_server_ip=<nfs_server_ip>
+# --nfs-server-ip <nfs_server_ip>      export nfs_server_ip=<nfs_server_ip>
 #
 function process-overlay-arguments()
 {

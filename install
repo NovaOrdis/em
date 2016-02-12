@@ -63,7 +63,7 @@ cp -r ${project_home}/src/main/bash/doc ./${zip_dir_name} || fail "failed to cop
 cp -r ${project_home}/src/main/bash/etc ./${zip_dir_name} || fail "failed to copy"
 mkdir ./${zip_dir_name}/lib || fail "failed to create ./${zip_dir_name}/lib"
 cp ${project_home}/target/em-${version}.jar ./${zip_dir_name}/lib || fail "failed to copy"
-cp ${M2}/log4j/log4j/1.2.16/log4j-1.2.16.jar ./${zip_dir_name}/lib || fail "failed to copy"
+cp ~/.m2/repository/log4j/log4j/1.2.16/log4j-1.2.16.jar ./${zip_dir_name}/lib || fail "failed to copy"
 
 #
 # update version and release date
@@ -80,12 +80,14 @@ echo "zip ok"
 
 ${zip_only} && exit 0
 
-cd /opt
+runtime_dir=/Users/ovidiu/runtime
+
+cd ${runtime_dir}
 rm -rf em* || fail "failed to rm"
 
-cp ${project_home}/target/em-${version}.zip /opt || fail "failed to copy"
+cp ${project_home}/target/em-${version}.zip ${runtime_dir} || fail "failed to copy"
 
-cd /opt
+cd ${runtime_dir}
 unzip em-${version}.zip  || fail "failed to unzip"
 rm em-${version}.zip || fail "failed to rm"
 

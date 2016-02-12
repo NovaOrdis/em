@@ -1,0 +1,49 @@
+#!/bin/bash
+
+lib=$(dirname $0)/../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/ec2.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/overlays.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/eap.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
+
+#
+# EAP Node overlay
+#
+
+#
+# configuration TODO: this must go somewhere else
+#
+# these limits assume c4.2xlarge (15GB of RAM)
+#java_min_mem=12g # ex: 1g or 515m
+
+#
+# dependencies
+#
+
+#
+# set WE_ARE_DOMAIN_CONTROLLER because some methods in the dependent eap-node overlay need
+# to know that
+#
+
+export WE_ARE_EAP_DOMAIN_CONTROLLER=true
+$(dirname $0)/eap-node $@
+
+#
+# overlay
+#
+
+process-overlay-arguments $@
+overlay-preconditions
+
+configure-management-interface $(get-primary-ip)
+configure-server-groups
+
+exit 0
+
+
+
+
+
+

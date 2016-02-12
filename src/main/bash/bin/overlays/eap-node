@@ -1,0 +1,55 @@
+#!/bin/bash
+
+lib=$(dirname $0)/../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/ec2.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/overlays.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/eap.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
+
+#
+# EAP Node overlay
+#
+
+#
+# configuration TODO: this must go somewhere else
+#
+domain_controller_address=172.31.23.180
+
+#
+# dependencies
+#
+
+$(dirname $0)/java $@
+
+#
+# overlay
+#
+
+process-overlay-arguments $@
+overlay-preconditions
+
+install-binaries
+update-user-environment-for-eap root
+update-user-environment-for-eap ec2-user
+add-a-management-user admin admin123
+configure-public-interface $(get-primary-ip)
+
+# TODO: replace modifying xml with external property (jboss.host.name)
+configure-host.xml-host-name $(hostname)
+
+if [ -z "${WE_ARE_EAP_DOMAIN_CONTROLLER}" ]; then
+    configure-master-domain-controller ${domain_controller_address}
+
+fi
+
+#configure-eap-to-start-at-boot
+
+exit 0
+
+
+
+
+
+

@@ -1,0 +1,262 @@
+#!/bin/bash
+
+#
+# Successful installation exports a valid JBOSS_HOME in the environment.
+#
+# return 0 if the installation modified state or 1 if not
+#
+function install-binaries() {
+
+    debug-arguments $@
+
+    local repository
+    repository=$(get-environment-configuration "repository") || exit 1
+    [ -d ${repository} ] || fail "repository directory ${repository} not accessible"
+
+    local eap_template_name
+    eap_template_name=$(get-environment-configuration "eap_template") || exit 1
+
+    local eap_template_file=${repository}/${eap_template_name}
+    [ -f ${eap_template_file} ] || fail "EAP template file ${eap_template_file} not found"
+
+    local top_level_dir_in_archive
+    top_level_dir_in_archive=$(get-top-level-dir-in-zip-archive ${eap_template_file}) || \
+        fail "failed to get the top level dir from archive ${eap_template_file}"
+
+    if [ -d /opt/${top_level_dir_in_archive} ]; then
+        debug "EAP already installed (/opt/${top_level_dir_in_archive})"
+        [ ! -h /opt/eap ] && fail "EAP already installed as /opt/${top_level_dir_in_archive} but /opt/eap link not created"
+        export JBOSS_HOME=/opt/eap
+        return 1;
+    fi
+
+    local unzip_quiet="-q"
+    ${verbose} && unzip_quiet=""
+
+    info "extracting ${eap_template_file} into /opt ..."
+    (cd /opt; unzip ${unzip_quiet} ${eap_template_file}) && \
+        info "extracted ${eap_template_file} into /opt" || \
+        fail "failed to extract ${eap_template_file} into /opt"
+
+    top_level_dir_in_archive="/opt/${top_level_dir_in_archive}"
+    debug "dir_name: ${top_level_dir_in_archive}"
+    [ -d ${top_level_dir_in_archive} ] || fail "${top_level_dir_in_archive} not a directory"
+
+    (cd /opt; ln -s $(basename ${top_level_dir_in_archive}) eap) && \
+        info "linked $(basename ${top_level_dir_in_archive}) to /opt/eap" || \
+        fail "failed to link $(basename ${top_level_dir_in_archive}) to /opt/eap"
+
+    export JBOSS_HOME=/opt/eap
+    debug "exported JBOSS_HOME=${JBOSS_HOME}"
+    return 0
+}
+
+# return 0 if the function changed state or 1 if not
+function update-user-environment-for-eap()
+{
+    debug-arguments $@
+
+    local user=$1
+    [ "${user}" = "" ] && fail "${FUNCNAME[0]}: 'name' not provided"
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+    [ -d ${JBOSS_HOME} ] || fail "${JBOSS_HOME} does not exist"
+
+    local state_changed=false
+
+    local bashrc_file="$(get-home ${user})/.bashrc"
+
+    debug ".bashrc file: ${bashrc_file}"
+
+    if ! grep -q "^export JBOSS_HOME=${JBOSS_HOME}" ${bashrc_file}; then
+        echo "export JBOSS_HOME=${JBOSS_HOME}" >> ${bashrc_file}
+        info "JBOSS_HOME set for user ${user}"
+        state_changed=true
+    fi
+
+    if ! grep -q "^alias jb=" ${bashrc_file}; then
+        echo "alias jb='cd \${JBOSS_HOME}'" >> ${bashrc_file}
+        info "'jb' alias created for user ${user}"
+        state_changed=true
+    fi
+
+    if ! grep -q "^alias jbb=" ${bashrc_file}; then
+        echo "alias jbb='cd \${JBOSS_HOME}/bin'" >> ${bashrc_file}
+        info "'jbb' alias created for user ${user}"
+        state_changed=true
+    fi
+
+    if ! grep -q "^alias jbc=" ${bashrc_file}; then
+        echo "alias jbc='cd \${JBOSS_HOME}/domain/configuration'" >> ${bashrc_file}
+        info "'jbc' alias created for user ${user}"
+        state_changed=true
+    fi
+
+    ${state_changed} && return 0 || return 1
+}
+
+# return 0 if the function changed state or 1 if not
+function add-a-management-user()
+{
+    debug-arguments $@
+
+    local management_user_name=$1
+    local management_user_password=$2
+    [ -z "${management_user_name}" ] && fail "${FUNCNAME[0]}: 'management_user_name' not provided"
+    [ -z "${management_user_password}" ] && fail "${FUNCNAME[0]}: 'management_user_password' not provided"
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+    [ -d ${JBOSS_HOME} ] || fail "${JBOSS_HOME} does not exist"
+
+    local state_changed=false
+
+    #
+    # relax password strength enforcement
+    #
+    if grep -q "^password.restriction=REJECT" ${JBOSS_HOME}/bin/add-user.properties; then
+        replace-regex "^password.restriction=REJECT" "password.restriction=WARN" ${JBOSS_HOME}/bin/add-user.properties || exit 1
+        info "relaxed password restrictions"
+        state_changed=true
+    fi
+
+    #
+    # add a management user
+    #
+    if ! grep -q "^${management_user_name}=" ${JBOSS_HOME}/standalone/configuration/mgmt-users.properties || ! grep -q "^${management_user_name}=" ${JBOSS_HOME}/domain/configuration/mgmt-users.properties; then
+        ${JBOSS_HOME}/bin/add-user.sh -r ManagementRealm -u ${management_user_name} -p "${management_user_password}" || \
+            fail "failed to execute ${JBOSS_HOME}/bin/add-user.sh"
+        # no need for info, add-user.sh reports at stdout
+        state_changed=true
+    fi
+
+    ${state_changed} && return 0 || return 1
+}
+
+# return 0 if the function changed state or 1 if not
+function configure-public-interface()
+{
+    local ip=$1
+
+    debug-arguments $@
+
+    [ -z "${ip}" ] && fail "${FUNCNAME[0]}: 'ip' not provided"
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    #
+    # this code configures a host controller, if we need to configure a standalone node, we must refactor
+    #
+
+    local domain_conf_file=${JBOSS_HOME}/bin/domain.conf
+    [ -f ${domain_conf_file} ] || fail "${domain_conf_file} does not exist"
+
+    if ! grep -q "^HOST_CONTROLLER_JAVA_OPTS=.*Djboss\.bind\.address=" ${domain_conf_file}; then
+        echo "" >> ${domain_conf_file}
+        echo "HOST_CONTROLLER_JAVA_OPTS=\"\${HOST_CONTROLLER_JAVA_OPTS} -Djboss.bind.address=${ip}\"" >> ${domain_conf_file}
+        info "configured public interface to bind to ${ip}"
+    fi
+}
+
+# return 0 if the function changed state or 1 if not
+function configure-management-interface()
+{
+    debug-arguments $@
+
+    local ip=$1
+
+    [ -z "${ip}" ] && fail "${FUNCNAME[0]}: 'ip' not provided"
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    #
+    # this code configures a host controller, if we need to configure a standalone node, we must refactor
+    #
+
+    local domain_conf_file=${JBOSS_HOME}/bin/domain.conf
+    [ -f ${domain_conf_file} ] || fail "${domain_conf_file} does not exist"
+
+    if ! grep -q "^HOST_CONTROLLER_JAVA_OPTS=.*Djboss\.bind\.address\.management=" ${domain_conf_file}; then
+        echo "" >> ${domain_conf_file}
+        echo "HOST_CONTROLLER_JAVA_OPTS=\"\${HOST_CONTROLLER_JAVA_OPTS} -Djboss.bind.address.management=${ip}\"" >> ${domain_conf_file}
+        info "configured management interface to bind to ${ip}"
+        return 0
+    fi
+
+    return 1
+}
+
+#
+# TODO: replace modifying xml with external property (jboss.host.name)
+#
+# return 0 if the function changed state or 1 if not
+function configure-host.xml-host-name() {
+
+    debug-arguments $@
+
+    local host_name=$1
+
+    [ -z "${host_name}" ] && fail "${FUNCNAME[0]}: 'host_name' not provided"
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    local host_conf_file=${JBOSS_HOME}/domain/configuration/host.xml
+    [ -f ${host_conf_file} ] || fail "${host_conf_file} does not exist"
+
+    if ! grep -q "^<host name=\"${host_name}\" " ${host_conf_file}; then
+            replace-regex "^\(<host name=\\\"\).*\(\\\" xmlns=.*\)" "\1"${host_name}"\2" ${host_conf_file} || exit 1
+        info "set host.xml host name to '${host_name}'"
+        return 0
+    fi
+
+    return 1
+}
+
+function configure-server-groups() {
+
+    debug-arguments $@
+
+    #
+    # just a hack now, reduce the memory size so we can start it on small Amazon EC2 instances
+    #
+
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+    local domain_xml_file=${JBOSS_HOME}/domain/configuration/domain.xml
+    [ -f ${domain_xml_file} ] || fail "${domain_xml_file} does not exist"
+
+    local size=200m
+
+    if ! grep -q "<heap size=\"${size}\"" ${domain_xml_file}; then
+        replace-regex "^\(.*\)<heap size=.*$" "\1<heap size=\\\""${size}"\\\" max-size=\\\""${size}"\\\"\/>" ${domain_xml_file} || exit 1
+        info "updated ${domain_xml_file}"
+        return 0
+    fi
+
+    return 1
+}
+
+function configure-master-domain-controller() {
+
+    debug-arguments $@
+
+    local domain_controller_address=$1
+    [ -z "${domain_controller_address}" ] && fail "'domain_controller_address' not provided"
+
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+    local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
+    [ -f ${host_xml_file} ] || fail "${host_xml_file} does not exist"
+
+    info "configuring ourselves as subordinate host controller"
+
+    #
+    # comment out "<local/>
+    #
+    if grep -q "^ *<local/> *$" ${host_xml_file}; then
+        replace-regex "<local\/>" "<!-- <local\/> -->" ${host_xml_file} || exit 1
+        info "turned off the <local/> domain controller in ${host_xml_file}"
+        return 0
+    fi
+
+    #
+    # enable the remote domain controller
+    #
+    if grep -q "<!-- *<remote host" ${host_xml_file}; then
+        replace-regex "^\( *\)<!-- *<remote host.*$" "\1<remote host=\\\""${domain_controller_address}"\\\" port=\\\"\${jboss.domain.master.port:9999}\\\" security-realm=\\\"ManagementRealm\\\"\/>" ${host_xml_file} || exit 1
+        info "configured domain controller ${domain_controller_address} in ${host_xml_file}"
+        return 0
+    fi
+}
