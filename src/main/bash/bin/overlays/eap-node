@@ -40,9 +40,21 @@ configure-public-interface $(get-primary-ip)
 configure-host.xml-host-name $(hostname)
 
 if [ -z "${WE_ARE_EAP_DOMAIN_CONTROLLER}" ]; then
+
+    #
+    # we are subordinate host controller
+    #
     configure-master-domain-controller ${domain_controller_address}
+else
+
+    #
+    # we are the domain controller
+    #
+
+    configure-servers 0
 
 fi
+
 
 #configure-eap-to-start-at-boot
 

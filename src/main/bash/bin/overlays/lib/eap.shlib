@@ -229,6 +229,71 @@ function configure-server-groups() {
     return 1
 }
 
+#
+# configure the "servers" definition in host.xml
+#
+# return 0 if the function changed state or 1 if not
+function configure-servers() {
+
+    debug-arguments $@
+
+    local server_count=$1
+
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+    local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
+    [ -f ${host_xml_file} ] || fail "${host_xml_file} does not exist"
+    [ -z "${server_count}" ] && fail "no server count specified"
+
+    local changes=false
+
+
+    #
+    # make a copy of the original file, unless it already exists
+    #
+
+    if ! ls $(dirname ${host_xml_file})/$(basename ${host_xml_file})-* 2>/dev/null 1>&2; then
+        #
+        # backup file does not exist
+        #
+        local extension=$(date +'%y.%m.%d.%H.%M.%S')
+        if cp ${host_xml_file} $(dirname ${host_xml_file})/$(basename ${host_xml_file})-${extension}; then
+            info "backed up ${host_xml_file} as $(basename ${host_xml_file})-${extension}"
+            changes=true
+        fi
+    fi
+
+    #
+    # currently just a hack now, eliminate all servers
+    #
+
+    if [ "${server_count}" = "0" ]; then
+
+        local line_number_from
+        line_number_from=$(grep -n "<servers>" ${host_xml_file}) || fail "did not find <servers> in ${host_xml_file}"
+        line_number_from=${line_number_from%%:*}
+        line_number_from=$(expr ${line_number_from} + 1)
+
+        local line_number_to
+        line_number_to=$(grep -n "</servers>" ${host_xml_file}) || fail "did not find </servers> in ${host_xml_file}"
+        line_number_to=${line_number_to%%:*}
+        line_number_to=$(expr ${line_number_to} - 1)
+
+        if [ ${line_number_from} -le ${line_number_to} ]; then
+            # there are lines to delete
+            local tmp=$(unique-file)
+            sed ${line_number_from}','${line_number_to}'d' ${host_xml_file} > ${tmp}
+            diff ${host_xml_file} ${tmp} > /dev/null && { rm ${tmp}; debug "no deletion occurred in ${host_xml_file}"; return 1; }
+            mv ${tmp} ${host_xml_file} || fail "failed to restore ${host_xml_file}"
+            info "edited <servers> section in ${host_xml_file}"
+            changes=true
+        fi
+    else
+        fail "non-zero server count not implemented yet"
+    fi
+
+    ${changes} && return 0 || return 1
+}
+
 function configure-master-domain-controller() {
 
     debug-arguments $@

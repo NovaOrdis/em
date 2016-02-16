@@ -268,7 +268,7 @@ function unique-file()
 
     [ -z ${prefix} ] && prefix="em"
 
-    echo "${dir}/${prefix}-"`date +'%y%m%d%H%M%S'`"${RANDOM}"
+    echo "${dir}/${prefix}-"$(date +'%y%m%d%H%M%S')"${RANDOM}"
 }
 
 ########################################################################################################################
