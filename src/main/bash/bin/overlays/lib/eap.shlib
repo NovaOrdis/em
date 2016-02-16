@@ -309,30 +309,9 @@ function configure-servers() {
 }
 
 #
-# the function scans the arguments, extracts the domain controller name from them and
-# echoes it at stdout. If no domain controller name is detected, the function fails
+# The function configures the local host.xml with the IP address of the domain controller
 #
-#
-function extract-domain-controller-name-from-overlay-args() {
-
-    debug-arguments $@
-
-    local original_args="$@"
-    local domain_controller_name
-
-    while [ -n "$1" ]; do
-        if [[ "$1" =~ --domain-controller= ]]; then
-            domain_controller_name=${1#*=}
-        fi
-        shift;
-    done
-
-    debug "domain_controller: ${domain_controller_name}"
-    [ -z "${domain_controller_name}" ] && fail "failed to identify a domain controller name (--domain-controller=<name>) among the overlay arguments: ${original_args}"
-    echo "${domain_controller_name}"
-}
-
-function configure-master-domain-controller() {
+function configure-master-domain-controller-locally() {
 
     debug-arguments $@
 
@@ -380,6 +359,35 @@ function configure-master-domain-controller() {
     fi
 
     ${changes} && return 0 || return 1
+}
+
+function establish-subordinate-host-controller-identity-on-domain-controller() {
+
+    debug-arguments $@
+
+    local domain_controller_ip_address=$1
+    local domain_controller_name=$2
+    local domain_controller_admin_username=$3
+    local domain_controller_admin_password=$4
+
+    [ -z "${domain_controller_ip_address}" ] && fail "'domain_controller_ip_address' not provided"
+    [ -z "${domain_controller_name}" ] && fail "'domain_controller_name' not provided"
+    [ -z "${domain_controller_admin_username}" ] && fail "'domain_controller_admin_username' not provided"
+    [ -z "${domain_controller_admin_password}" ] && fail "'domain_controller_admin_password' not provided"
+
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    local jboss_cli=${JBOSS_HOME}/bin/jboss-cli.sh
+    local jboss_cli_output
+
+    jboss_cli_output=$(${jboss_cli} --connect --controller=${domain_controller_ip_address}:9999 \
+        --user=${domain_controller_admin_username} --password=${domain_controller_admin_password} <<EOF
+cd /
+ls
+EOF
+) || fail "failed to execute EAP CLI command"
+
+    debug "CLI output: ${jboss_cli_output}"
 }
 
 function configure-eap-to-start-at-boot() {
