@@ -52,11 +52,9 @@ else
     #
 
     configure-servers 0
-
 fi
 
-
-#configure-eap-to-start-at-boot
+configure-eap-to-start-at-boot
 
 exit 0
 

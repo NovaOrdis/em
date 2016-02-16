@@ -23,7 +23,7 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 process-overlay-arguments $@
 overlay-preconditions
 
-set-hostname ${name} && info "hostname successfully set to ${name}" || info "hostname ${name} already set"
+set-hostname ${name} && info "hostname set to ${name}" || info "hostname ${name} already set"
 install-package zip && info "zip successfully installed" || info "zip already installed"
 install-package unzip && info "unzip successfully installed" || info "unzip already installed"
 setup-user-environment root

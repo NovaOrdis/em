@@ -30,6 +30,8 @@ function install-binaries() {
         return 1;
     fi
 
+    info "installing EAP ..."
+
     local unzip_quiet="-q"
     ${verbose} && unzip_quiet=""
 
@@ -91,6 +93,18 @@ function update-user-environment-for-eap()
         state_changed=true
     fi
 
+    if ! grep -q "^alias jbl=" ${bashrc_file}; then
+        echo "alias jbl='cd \${JBOSS_HOME}/domain/log'" >> ${bashrc_file}
+        info "'jbc' alias created for user ${user}"
+        state_changed=true
+    fi
+
+    if ! grep -q "^alias jbprocs=" ${bashrc_file}; then
+        echo "alias jbprocs='ps -ef | grep java | grep --color \"\-D\[.*\]\"'" >> ${bashrc_file}
+        info "'jbprocs' alias created for user ${user}"
+        state_changed=true
+    fi
+
     ${state_changed} && return 0 || return 1
 }
 
@@ -113,7 +127,7 @@ function add-a-management-user()
     #
     if grep -q "^password.restriction=REJECT" ${JBOSS_HOME}/bin/add-user.properties; then
         replace-regex "^password.restriction=REJECT" "password.restriction=WARN" ${JBOSS_HOME}/bin/add-user.properties || exit 1
-        info "relaxed password restrictions"
+        info "relaxed password restrictions for add-user.sh"
         state_changed=true
     fi
 
@@ -323,5 +337,108 @@ function configure-master-domain-controller() {
         replace-regex "^\( *\)<!-- *<remote host.*$" "\1<remote host=\\\""${domain_controller_address}"\\\" port=\\\"\${jboss.domain.master.port:9999}\\\" security-realm=\\\"ManagementRealm\\\"\/>" ${host_xml_file} || exit 1
         info "configured domain controller ${domain_controller_address} in ${host_xml_file}"
         return 0
+    fi
+}
+
+function configure-eap-to-start-at-boot() {
+
+    debug-arguments $@
+
+    [ -z ${JAVA_HOME} ] && fail "previous steps failed to export JAVA_HOME"
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    local script_dir=/usr/lib/systemd/scripts
+    local script_file=/usr/lib/systemd/scripts/jboss-host-controller
+
+    #
+    # copy the System V init script in the systemd script directory if it is not already there
+    #
+
+    if [ ! -f ${script_file} ]; then
+        cp ${JBOSS_HOME}/bin/init.d/jboss-as-domain.sh ${script_file} && \
+            debug "copied ${JBOSS_HOME}/bin/init.d/jboss-as-domain.sh as ${script_file}" || \
+            fail "failed to copy ${JBOSS_HOME}/bin/init.d/jboss-as-domain.sh as ${script_file}"
+    fi
+
+    #
+    # customize the startup script
+    #
+    if ! grep -q "^JBOSS_HOME=${JBOSS_HOME}" ${script_file}; then
+        local tmp=$(unique-file)
+        (cat << EOF
+#!/bin/bash
+#
+# JBoss EAP ExecStart=/ExecStop= script
+#
+
+JBOSS_HOME=${JBOSS_HOME}
+JBOSS_USER=root
+#
+# The amount of time to wait for startup
+#
+STARTUP_WAIT=30
+#
+# The amount of time to wait for shutdown
+#
+SHUTDOWN_WAIT=30
+#
+# Location to keep the console log
+#
+JBOSS_CONSOLE_LOG=\${JBOSS_HOME}/domain/log/console.log
+[ ! -d \${JBOSS_HOME}/domain/log ] && { mkdir -p \${JBOSS_HOME}/domain/log; chown \${JBOSS_USER} \${JBOSS_HOME}/domain/log; chmod a+rx \${JBOSS_HOME}/domain/log; }
+
+EOF
+) > ${tmp}
+    local tmp2=$(unique-file)
+    cat ${tmp} ${script_file} >> ${tmp2}
+    rm ${tmp}
+    mv ${tmp2} ${script_file} && \
+        info "customized systemd ExecStart= script ${script_file}" || \
+        fail "failed to customize systemd ExecStart= script ${script_file}"
+    fi
+
+    #
+    # set permissions
+    #
+    chmod a+rx ${script_file} && \
+        debug "set a+rx on ${script_file}" || \
+        fail "failed to chmod a+rx ${script_file}"
+
+    #
+    # create the unit file
+    #
+
+    local unit_file=/usr/lib/systemd/system/$(basename ${script_file}).service
+
+    if [ -f ${unit_file} ]; then
+        info "systemd unit file ${unit_file} already exists"
+    else
+        (cat << EOF
+[Unit]
+Description=EAP Host Controller Service
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=${script_file} start
+ExecStop=${script_file} stop
+RemainAfterExit=yes
+Environment="JAVA_HOME=${JAVA_HOME}"
+
+[Install]
+WantedBy=multi-user.target
+EOF
+) > ${unit_file}
+        info "created systemd unit file ${unit_file}"
+    fi
+
+    if ! systemctl -q is-enabled $(basename ${unit_file}) 2>/dev/null; then
+        systemctl daemon-reload && \
+            info "restarted systemd" || \
+            fail "failed to restart systemd"
+
+        systemctl enable $(basename ${unit_file}) && \
+            info "configured $(basename ${script_file}).service to start at boot" || \
+            fail "fail to configure $(basename ${script_file}).service to start at boot"
     fi
 }
