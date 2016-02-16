@@ -13,11 +13,6 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 #
 
 #
-# configuration TODO: this must go somewhere else
-#
-domain_controller_address=172.31.23.180
-
-#
 # dependencies
 #
 
@@ -29,9 +24,6 @@ $(dirname $0)/java $@
 
 process-overlay-arguments $@
 overlay-preconditions
-
-info "synthetic bail out"
-exit 0
 
 install-binaries
 update-user-environment-for-eap root
@@ -47,7 +39,10 @@ if [ -z "${WE_ARE_EAP_DOMAIN_CONTROLLER}" ]; then
     #
     # we are subordinate host controller
     #
-    configure-master-domain-controller ${domain_controller_address}
+    domain_controller_name=$(extract-domain-controller-name-from-overlay-args ${args}) || exit 1
+    domain_controller_ip_address=$(get-internal-ip-for-name ${domain_controller_name}) || exit 1
+    configure-master-domain-controller ${domain_controller_ip_address} ${domain_controller_name}
+
 else
 
     #

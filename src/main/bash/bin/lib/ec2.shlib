@@ -124,13 +124,12 @@ function insure-access-keys-are-correctly-set-up-or-fail()
 
 # runs ec2-describe-instances and gets the private IP address associated with the name. This is an expensive operation
 # as it requires at least two JVM instances to be started and WAN access. Normally you should only use it once when
-# setting the name/ip pairs in /etc/hosts.
+# setting the name/ip pairs in /etc/hosts. The function implies that Amazon EC2 CLI is available on the remote instance
+# but this should be the case.
 #
 # TODO: because is expensive, refactor it to accept multiple arguments and do the ec2-api-tool call and Java call only once
 #
-# TODO 2: this is executed on instances, so Amazon EC2 CLI must be made availabe on instances
-#
-# may return empty string if the name cannot be resolved
+# It may return empty string if the name cannot be resolved
 #
 function get-internal-ip-for-name()
 {
@@ -141,11 +140,11 @@ function get-internal-ip-for-name()
 
     insure-access-keys-are-correctly-set-up-or-fail
 
-    local output
-    output=$(ec2-describe-instances | jw ec2.grep_instances name=${name} --list private-ip) || fail "failed to ec2-describe-instances/parse"
-    debug "output: ${output}"
-
+    local local_ip_addr
+    local_ip_addr=$(ec2-describe-instances | jw ec2.grep_instances name=${name} --list private-ip) || fail "failed to ec2-describe-instances/parse"
+    debug "local_ip_addr before substitution: ${local_ip_addr}"
     # --list outputs "N/A" for values it can't find, so we replace that with empty string
-    output=${output/N\/A/}
-    echo ${output}
+    local_ip_addr=${local_ip_addr/N\/A/}
+    debug "local_ip_addr after substitution: ${local_ip_addr}"
+    echo ${local_ip_addr}
 }

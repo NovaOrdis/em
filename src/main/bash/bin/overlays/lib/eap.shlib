@@ -308,18 +308,58 @@ function configure-servers() {
     ${changes} && return 0 || return 1
 }
 
+#
+# the function scans the arguments, extracts the domain controller name from them and
+# echoes it at stdout. If no domain controller name is detected, the function fails
+#
+#
+function extract-domain-controller-name-from-overlay-args() {
+
+    debug-arguments $@
+
+    local original_args="$@"
+    local domain_controller_name
+
+    while [ -n "$1" ]; do
+        if [[ "$1" =~ --domain-controller= ]]; then
+            domain_controller_name=${1#*=}
+        fi
+        shift;
+    done
+
+    debug "domain_controller: ${domain_controller_name}"
+    [ -z "${domain_controller_name}" ] && fail "failed to identify a domain controller name (--domain-controller=<name>) among the overlay arguments: ${original_args}"
+    echo "${domain_controller_name}"
+}
+
 function configure-master-domain-controller() {
 
     debug-arguments $@
 
-    local domain_controller_address=$1
-    [ -z "${domain_controller_address}" ] && fail "'domain_controller_address' not provided"
+    local domain_controller_ip_address=$1
+    [ -z "${domain_controller_ip_address}" ] && fail "'domain_controller_ip_address' not provided"
+    local domain_controller_name=$2 # this is used for friendlier info messages only
+    [ -z "${domain_controller_name}" ] && fail "'domain_controller_name' not provided"
 
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
     local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
     [ -f ${host_xml_file} ] || fail "${host_xml_file} does not exist"
 
-    info "configuring ourselves as subordinate host controller"
+    if grep -q "^ *<remote host=\""${domain_controller_ip_address} ${host_xml_file}; then
+        info "host controller already configured as a subordinate of domain controller ${domain_controller_name} (${domain_controller_ip_address})"
+        return 1
+    fi
+
+    #
+    # TODO - if we need to change the domain controller IP address
+    #
+    if grep -q "^ *<remote host=" ${host_xml_file}; then
+        fail "this subordinate host controller was already configured with a domain controller different than ${domain_controller_ip_address} - we don't handle this case yet"
+    fi
+
+    info "configuring ourselves as subordinate host controller for domain controller ${domain_controller_ip_address}"
+
+    local changes=false
 
     #
     # comment out "<local/>
@@ -327,17 +367,19 @@ function configure-master-domain-controller() {
     if grep -q "^ *<local/> *$" ${host_xml_file}; then
         replace-regex "<local\/>" "<!-- <local\/> -->" ${host_xml_file} || exit 1
         info "turned off the <local/> domain controller in ${host_xml_file}"
-        return 0
+        changes=true
     fi
 
     #
     # enable the remote domain controller
     #
     if grep -q "<!-- *<remote host" ${host_xml_file}; then
-        replace-regex "^\( *\)<!-- *<remote host.*$" "\1<remote host=\\\""${domain_controller_address}"\\\" port=\\\"\${jboss.domain.master.port:9999}\\\" security-realm=\\\"ManagementRealm\\\"\/>" ${host_xml_file} || exit 1
-        info "configured domain controller ${domain_controller_address} in ${host_xml_file}"
-        return 0
+        replace-regex "^\( *\)<!-- *<remote host.*$" "\1<remote host=\\\""${domain_controller_ip_address}"\\\" port=\\\"\${jboss.domain.master.port:9999}\\\" security-realm=\\\"ManagementRealm\\\"\/>" ${host_xml_file} || exit 1
+        info "configured domain controller IP address ${domain_controller_ip_address} in ${host_xml_file}"
+        changes=true
     fi
+
+    ${changes} && return 0 || return 1
 }
 
 function configure-eap-to-start-at-boot() {
