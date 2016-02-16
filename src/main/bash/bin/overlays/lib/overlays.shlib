@@ -90,9 +90,9 @@ function process-overlay-arguments()
     export args=${remaining}
     export name
     export nfs_server_ip
-    debug "${FUNCNAME[0]}.name: ${name}"
-    debug "${FUNCNAME[0]}.nfs_server_ip: ${nfs_server_ip}"
-    debug "${FUNCNAME[0]}.args: ${args}"
+    debug "${FUNCNAME[0]}() name: ${name}"
+    debug "${FUNCNAME[0]}() nfs_server_ip: ${nfs_server_ip}"
+    debug "${FUNCNAME[0]}() args: ${args}"
 }
 
 #

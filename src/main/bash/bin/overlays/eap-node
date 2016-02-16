@@ -30,6 +30,9 @@ $(dirname $0)/java $@
 process-overlay-arguments $@
 overlay-preconditions
 
+info "synthetic bail out"
+exit 0
+
 install-binaries
 update-user-environment-for-eap root
 update-user-environment-for-eap ec2-user
