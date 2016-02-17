@@ -157,3 +157,36 @@ function get-environment-configuration()
     [ -z ${value} ] && fail "'${env_config_var_name}' environemnt configuration variable not defined in ${ENVIRONMENT_CONFIGURATION_FILE}"
     echo "${value}"
 }
+
+#
+# The recommended way to execute commands remotely between environment hosts. The function is a wrapper around an ssh
+# invocation that uses the environment provisioning private key as identity file. The authentication is guaranteed to
+# succeed during the environment setup phase, because all environment hosts have been configured to list the public
+# key corresponding to the provisioning private key amongst their authorized keys. The usage pattern:
+#
+# local remote_output
+# local remote_command="..."
+# remote_output=$(execute-remotely ${target_ip} ${remote_command}) || fail "failed to execute remotely"
+#
+function execute-remotely() {
+
+    debug-arguments $@
+
+    local target_ip=$1
+    [ -z "${target_ip}" ] && fail "${FUNCNAME[0]}: 'target_ip' not provided"
+    shift
+
+    local remote_command="$@"
+    debug "remote_command: ${remote_command}"
+
+    local identity_file=$(dirname $0)/../../etc/em-provisioning-private-key.pem
+    [ -f ${identity_file} ] || fail "environment provisioning private key file ${identity_file} not found or not readable"
+    local remote_user=ec2-user
+    local ssh_client_options="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${identity_file}"
+
+    debug "executing remotely: ssh ${ssh_client_options} ${remote_user}@${target_ip} ${remote_command}"
+
+    if ! ssh ${ssh_client_options} ${remote_user}@${target_ip} ${remote_command}; then
+        fail "failed to ssh into ${remote_user}@${target_ip}"
+    fi
+}

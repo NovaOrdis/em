@@ -367,27 +367,35 @@ function establish-subordinate-host-controller-identity-on-domain-controller() {
 
     local domain_controller_ip_address=$1
     local domain_controller_name=$2
-    local domain_controller_admin_username=$3
-    local domain_controller_admin_password=$4
+#    local domain_controller_admin_username=$3
+#    local domain_controller_admin_password=$4
 
     [ -z "${domain_controller_ip_address}" ] && fail "'domain_controller_ip_address' not provided"
     [ -z "${domain_controller_name}" ] && fail "'domain_controller_name' not provided"
-    [ -z "${domain_controller_admin_username}" ] && fail "'domain_controller_admin_username' not provided"
-    [ -z "${domain_controller_admin_password}" ] && fail "'domain_controller_admin_password' not provided"
+#    [ -z "${domain_controller_admin_username}" ] && fail "'domain_controller_admin_username' not provided"
+#    [ -z "${domain_controller_admin_password}" ] && fail "'domain_controller_admin_password' not provided"
 
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
 
-    local jboss_cli=${JBOSS_HOME}/bin/jboss-cli.sh
-    local jboss_cli_output
+    local remote_command="whoami"
+    local output
+    output=$(execute-remotely ${domain_controller_ip_address} ${remote_command}) || \
+        fail "failed to execute \"${remote_command}\" on ${domain_controller_ip_address}"
 
-    jboss_cli_output=$(${jboss_cli} --connect --controller=${domain_controller_ip_address}:9999 \
-        --user=${domain_controller_admin_username} --password=${domain_controller_admin_password} <<EOF
-cd /
-ls
-EOF
-) || fail "failed to execute EAP CLI command"
+    debug "${output}"
 
-    debug "CLI output: ${jboss_cli_output}"
+
+#    local jboss_cli=${JBOSS_HOME}/bin/jboss-cli.sh
+#    local jboss_cli_output
+#
+#    jboss_cli_output=$(${jboss_cli} --connect --controller=${domain_controller_ip_address}:9999 \
+#        --user=${domain_controller_admin_username} --password=${domain_controller_admin_password} <<EOF
+#cd /
+#ls
+#EOF
+#) || fail "failed to execute EAP CLI command"
+#
+#    debug "CLI output: ${jboss_cli_output}"
 }
 
 function configure-eap-to-start-at-boot() {

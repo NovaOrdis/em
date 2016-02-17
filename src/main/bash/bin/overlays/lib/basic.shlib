@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# return 0 if the identity is set up by the fucntion, 1 if the identity was already configured and exits on failure
+# return 0 if the identity is set up by the function, 1 if the identity was already configured and exits on failure
 #
 function setup-nfs-server-identity()
 {
@@ -15,13 +15,8 @@ function setup-nfs-server-identity()
     local modified=false
 
     # ssh into the NFS server and get the hostname
-    local key_file=$(dirname $0)/../../etc/em-provisioning-private-key.pem
-
-    [ -f ${key_file} ] || fail "private key file ${key_file} not found or not readable"
-
-    debug "ssh-ing into the NFS server ec2-user@${nfs_server_ip} with key file ${key_file} to get the hostname ..."
-
-    nfs_server_hostname=$(ssh -i ${key_file} ec2-user@${nfs_server_ip} "hostname") || fail "failed to ssh into ec2-user@${nfs_server_ip}"
+    local nfs_server_hostname
+    nfs_server_hostname=$(execute-remotely ${nfs_server_ip} "hostname") || fail "failed to execute remotely"
 
     debug "nfs_server_hostname: ${nfs_server_hostname}"
 
