@@ -207,6 +207,8 @@ function execute-remotely() {
     local ssh_connection_user=ec2-user
     local ssh_client_options="-t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${identity_file}"
 
+    [ "${remote_username}" = "-" ] && remote_username=${ssh_connection_user}
+
     #
     # depending on the identity, we may want to sudo
     #

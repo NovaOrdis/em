@@ -20,7 +20,7 @@ function main()
     local ip
     ip=$(resolve-ip ${name}) || exit 1
     [ "${ip}" = "" ] && fail "no IP address associated with ${name} in /etc/hosts"
-    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ec2-user@${ip}
+    ssh -o StrictHostKeyChecking=no ec2-user@${ip}
 }
 
 main
