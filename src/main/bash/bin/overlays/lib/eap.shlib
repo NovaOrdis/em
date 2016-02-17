@@ -367,35 +367,75 @@ function establish-subordinate-host-controller-identity-on-domain-controller() {
 
     local domain_controller_ip_address=$1
     local domain_controller_name=$2
-#    local domain_controller_admin_username=$3
-#    local domain_controller_admin_password=$4
 
     [ -z "${domain_controller_ip_address}" ] && fail "'domain_controller_ip_address' not provided"
     [ -z "${domain_controller_name}" ] && fail "'domain_controller_name' not provided"
-#    [ -z "${domain_controller_admin_username}" ] && fail "'domain_controller_admin_username' not provided"
-#    [ -z "${domain_controller_admin_password}" ] && fail "'domain_controller_admin_password' not provided"
 
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+    [ -z ${JAVA_HOME} ] && fail "previous steps failed to export JAVA_HOME"
 
-    local remote_command="whoami"
+    local host_controller_name=$(hostname)
+    local password="${host_controller_name}_123"
+
+    #
+    # Unsafe assumption: we assume EAP is installed in the same location on the domain controller so
+    # we use the same JBOSS_HOME. This is most likely true, as we strive for homogeneous environments
+    # but it may not be. If that is the case, we need to invoke remotely into the domain controller's
+    # management interface using the local CLI and get the installation directory
+    #
+
+    #
+    # Another unsafe assumption: we assume Java is installed in the same location. Same considerations
+    # as the above apply.
+    #
+
+    local remote_jboss_home=${JBOSS_HOME}
+    local remote_java_home=${JAVA_HOME}
+    local remote_command="export JAVA_HOME=${remote_java_home}; ${remote_jboss_home}/bin/add-user.sh -r ManagementRealm -u ${host_controller_name} -p ${password}"
     local output
-    output=$(execute-remotely ${domain_controller_ip_address} ${remote_command}) || \
-        fail "failed to execute \"${remote_command}\" on ${domain_controller_ip_address}"
+    output=$(execute-remotely "root" ${domain_controller_ip_address} ${remote_command}) || exit 1
+    debug "remote execution output: ${output}"
 
-    debug "${output}"
+    local server_identity_secret_value=$(compute-server-identity-secret-value ${password})
+    debug "server_identity_secret_value: ${server_identity_secret_value}"
 
+    #
+    # we can't CLI for the time being, server not up at this point
+    #
+    # jboss-cli "/host=${host_controller_name}/core-service=management/security-realm=ManagementRealm/server-identity=secret:add(value=\""${server_identity_secret_value}"\")"
+    #
 
-#    local jboss_cli=${JBOSS_HOME}/bin/jboss-cli.sh
-#    local jboss_cli_output
-#
-#    jboss_cli_output=$(${jboss_cli} --connect --controller=${domain_controller_ip_address}:9999 \
-#        --user=${domain_controller_admin_username} --password=${domain_controller_admin_password} <<EOF
-#cd /
-#ls
-#EOF
-#) || fail "failed to execute EAP CLI command"
-#
-#    debug "CLI output: ${jboss_cli_output}"
+    #
+    # we have to modify host.xml instead ...
+    #
+
+    local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
+
+    [ -f ${host_xml_file} ] || fail "${host_xml_file} not found"
+
+    if ! grep -q "${server_identity_secret_value}" ${host_xml_file}; then
+        # injecting server identity
+        local line_nr
+        line_nr=$(grep -n -m 1 "<\/authorization>" ${host_xml_file})
+        line_nr=${line_nr%%:*}
+        debug "line_nr: ${line_nr}"
+        local tmp=$(unique-file)
+        cat ${host_xml_file} | sed -e ${line_nr}'a\
+                <server-identities>\
+                    <secret value="'${server_identity_secret_value}'"/>\
+                </server-identities>' > ${tmp}
+        mv ${tmp} ${host_xml_file} && \
+            info "inserted server identity into ${host_xml_file}" || \
+            fail "failed to restore ${host_xml_file}"
+    fi
+}
+
+function compute-server-identity-secret-value() {
+
+    debug-arguments $@
+    local password=$1
+    [ -z "${password}" ] && fail "'password' not provided"
+    echo -n "${password}" | openssl enc -base64
 }
 
 function configure-eap-to-start-at-boot() {
@@ -499,4 +539,27 @@ EOF
             info "configured $(basename ${script_file}).service to start at boot" || \
             fail "fail to configure $(basename ${script_file}).service to start at boot"
     fi
+}
+
+#
+# Connects locally and executes the given command. It needs the instance to be up and running.
+#
+function jboss-cli() {
+
+    debug-arguments $@
+
+    local command=$1
+    [ -z "${command}" ] && fail "'command' not provided"
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    local output
+    if output=$(${JBOSS_HOME}/bin/jboss-cli.sh -c <<EOF
+${command}
+EOF
+); then
+        # success
+        debug "${output}"
+   else
+        fail "failed to execute local JBoss CLI command: ${output}"
+   fi
 }

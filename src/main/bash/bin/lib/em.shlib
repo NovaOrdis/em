@@ -162,31 +162,77 @@ function get-environment-configuration()
 # The recommended way to execute commands remotely between environment hosts. The function is a wrapper around an ssh
 # invocation that uses the environment provisioning private key as identity file. The authentication is guaranteed to
 # succeed during the environment setup phase, because all environment hosts have been configured to list the public
-# key corresponding to the provisioning private key amongst their authorized keys. The usage pattern:
+# key corresponding to the provisioning private key amongst their authorized keys. The identity of the ssh connection
+# on the remote host is "ec2-user".
 #
-# local remote_output
-# local remote_command="..."
-# remote_output=$(execute-remotely ${target_ip} ${remote_command}) || fail "failed to execute remotely"
+# User identity on the remote host: even if the identity of the ssh connection is always "ec2-user", the caller may
+# request any user identity to be used when executing the remote command(s). The user identity is enforced by the
+# first argument: if "-", the command will be simply executed remotely, implicitly using the ssh connection identity.
+# If anything else than "-", execute-remotely() will internally use sudo to switch to the requested identity.
+#
+# The usage pattern:
+#
+# remote_output=$(execute-remotely <"-"|${username}> ${target_ip} ${remote_command}) || exit 1
+#
+# DO NOT sudo as part of the remote_command, execute-remotely() will do as appropriate.
+#
+# Remote Command:
+#
+# o variables are substituted locally, before the command is sent over SSH. If you want to delay variable
+#   substitution until the command reaches the remote host, user \${...}
+#
+# o may use ";" to specify multiple serial commands.
+#   Example: remote_command="export JAVA_HOME=/opt/java; /opt/eap/bin/add-user.sh"
+#
 #
 function execute-remotely() {
 
     debug-arguments $@
+
+    local remote_username=$1
+    [ -z "${remote_username}" ] && fail "${FUNCNAME[0]}: 'remote_username' not provided"
+    shift
 
     local target_ip=$1
     [ -z "${target_ip}" ] && fail "${FUNCNAME[0]}: 'target_ip' not provided"
     shift
 
     local remote_command="$@"
+    debug "remote_username: ${remote_username}"
+    debug "target_ip: ${target_ip}"
     debug "remote_command: ${remote_command}"
 
     local identity_file=$(dirname $0)/../../etc/em-provisioning-private-key.pem
     [ -f ${identity_file} ] || fail "environment provisioning private key file ${identity_file} not found or not readable"
-    local remote_user=ec2-user
-    local ssh_client_options="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${identity_file}"
+    local ssh_connection_user=ec2-user
+    local ssh_client_options="-t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${identity_file}"
 
-    debug "executing remotely: ssh ${ssh_client_options} ${remote_user}@${target_ip} ${remote_command}"
+    #
+    # depending on the identity, we may want to sudo
+    #
+    if [ "${remote_username}" != "${ssh_connection_user}" ]; then
 
-    if ! ssh ${ssh_client_options} ${remote_user}@${target_ip} ${remote_command}; then
-        fail "failed to ssh into ${remote_user}@${target_ip}"
+        if [ "${remote_username}" = "root" ]; then
+            remote_command="sudo -n /bin/bash -c \"${remote_command}\""
+        else
+            remote_command="sudo -n -u ${remote_username} /bin/bash -c \"${remote_command}\""
+        fi
+    fi
+
+    debug "executing remotely: ssh ${ssh_client_options} ${ssh_connection_user}@${target_ip} ${remote_command}"
+
+    local remote_output
+
+    if remote_output=$(ssh ${ssh_client_options} ${ssh_connection_user}@${target_ip} ${remote_command}); then
+        #
+        # successful execution
+        #
+        debug "remote execution on ${target_ip} successful; output will be send to stdout"
+        echo "${remote_output}"
+    else
+        #
+        # failed execution
+        #
+        fail "${remote_output}"
     fi
 }

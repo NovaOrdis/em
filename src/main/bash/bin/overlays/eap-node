@@ -44,10 +44,8 @@ if [ -z "${WE_ARE_EAP_DOMAIN_CONTROLLER}" ]; then
     domain_controller_ip_address=$(get-internal-ip-for-name ${domain_controller_name}) || exit 1
     configure-master-domain-controller-locally ${domain_controller_ip_address} ${domain_controller_name}
 
-    admin_username=$(extract-from-overlay-args "domain-controller-admin-username" ${args}) || exit 1
-    admin_password=$(extract-from-overlay-args "domain-controller-admin-password" ${args}) || exit 1
     establish-subordinate-host-controller-identity-on-domain-controller \
-        ${domain_controller_ip_address} ${domain_controller_name} ${admin_username} ${admin_password}
+        ${domain_controller_ip_address} ${domain_controller_name}
 
 else
 

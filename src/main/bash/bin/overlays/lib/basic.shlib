@@ -16,7 +16,7 @@ function setup-nfs-server-identity()
 
     # ssh into the NFS server and get the hostname
     local nfs_server_hostname
-    nfs_server_hostname=$(execute-remotely ${nfs_server_ip} "hostname") || fail "failed to execute remotely"
+    nfs_server_hostname=$(execute-remotely "-" ${nfs_server_ip} "hostname") || exit 1
 
     debug "nfs_server_hostname: ${nfs_server_hostname}"
 
