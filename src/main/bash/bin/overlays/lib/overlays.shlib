@@ -126,7 +126,7 @@ function overlay-preconditions()
 #
 #   --<argument_name>=<argument_value>
 
-# and echoes the value at stdout. If no value is detected, the function fails
+# and echoes the value at stdout. If no value is detected, the function echoes the empty string
 function extract-from-overlay-args() {
 
     debug-arguments $@
@@ -150,6 +150,6 @@ function extract-from-overlay-args() {
     done
 
     debug "argument_value: ${argument_value}"
-    [ -z "${argument_value}" ] && fail "failed to identify a value for ${argument_name} (--${argument_name}=<value>) amongst the overlay arguments: ${original_args}"
+    [ -z "${argument_value}" ] && debug "failed to identify a value for ${argument_name} (--${argument_name}=<value>) amongst the overlay arguments: ${original_args}"
     echo "${argument_value}"
 }

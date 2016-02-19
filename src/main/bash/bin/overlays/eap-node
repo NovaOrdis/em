@@ -47,13 +47,16 @@ if [ -z "${WE_ARE_EAP_DOMAIN_CONTROLLER}" ]; then
     establish-subordinate-host-controller-identity-on-domain-controller \
         ${domain_controller_ip_address} ${domain_controller_name}
 
+    topology=$(extract-from-overlay-args "topology" ${args}) || exit 1
+    configure-topology ${topology}
+
 else
 
     #
     # we are the domain controller
     #
 
-    configure-servers 0
+    configure-topology "" # no arguments means remove all existing topology
 fi
 
 configure-eap-to-start-at-boot

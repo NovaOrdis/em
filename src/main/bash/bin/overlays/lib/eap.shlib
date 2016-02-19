@@ -400,13 +400,14 @@ function establish-subordinate-host-controller-identity-on-domain-controller() {
     debug "server_identity_secret_value: ${server_identity_secret_value}"
 
     #
-    # we can't CLI for the time being, server not up at this point
+    # Update host.xml with the server identity secret value. We can't CLI for the time being, server not up
+    # at this point
     #
     # jboss-cli "/host=${host_controller_name}/core-service=management/security-realm=ManagementRealm/server-identity=secret:add(value=\""${server_identity_secret_value}"\")"
     #
 
     #
-    # we have to modify host.xml instead ...
+    # We have to modify host.xml directly instead ...
     #
 
     local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
@@ -414,7 +415,11 @@ function establish-subordinate-host-controller-identity-on-domain-controller() {
     [ -f ${host_xml_file} ] || fail "${host_xml_file} not found"
 
     if ! grep -q "${server_identity_secret_value}" ${host_xml_file}; then
-        # injecting server identity
+
+        #
+        # injecting server identity secret value
+        #
+
         local line_nr
         line_nr=$(grep -n -m 1 "<\/authorization>" ${host_xml_file})
         line_nr=${line_nr%%:*}
@@ -428,6 +433,251 @@ function establish-subordinate-host-controller-identity-on-domain-controller() {
             info "inserted server identity into ${host_xml_file}" || \
             fail "failed to restore ${host_xml_file}"
     fi
+}
+
+#
+# gets a topology string
+# (<server-group-name1>:<server-name1>,<server-name2>,...;<server-group-name2>:<server-name3>,<server-name4>;...) and
+# updates host.xml with the topology, after verifying that the server groups exist on the domain controller.
+#
+# empty topology string is permitted, it means: remove existing topology
+#
+function configure-topology() {
+
+    debug-arguments $@
+
+    local topology=$1 # empty topology is permitted
+
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    local existing_servers
+    existing_servers=$(get-existing-servers-from-host-xml)
+    debug "existing_servers: ${existing_servers}"
+
+    local added_servers
+
+    if [ -n "${topology}" ]; then
+        #
+        # we want to add servers
+        #
+
+        local server_groups
+        server_groups=$(get-server-groups-from-topology-string ${topology}) || exit 1
+
+        local added_servers
+
+        #
+        # add the requested server groups
+        #
+
+        for sg in ${server_groups}; do
+
+            debug "processing topology server group ${sg}"
+
+            #
+            # check if the server group exists on the domain controller
+            #
+
+            local server_names=$(get-servers-for-group ${sg} ${topology}) || exit 1
+
+            debug "adding servers ${server_names} to server group ${sg}"
+
+            for sn in ${server_names}; do
+                debug "server name: ${sn} server group name: ${sg}"
+                add-server ${sn} ${sg}
+                added_servers="${added_servers} ${sn}:${sg}"
+            done
+        done
+
+        debug "added_servers: ${added_servers}"
+    fi
+
+    #
+    # remove the extra servers
+    #
+    local servers_to_remove
+
+    for es in ${existing_servers}; do
+        local added=false
+        for as in ${added_servers}; do
+            if [ "${es}" = "${as}" ]; then
+                added=true;
+                break;
+            fi
+        done
+
+        if ! ${added}; then
+            servers_to_remove="${servers_to_remove} ${es}"
+        fi
+    done
+
+    debug "servers_to_remove: ${servers_to_remove}"
+
+    remove-servers ${servers_to_remove}
+}
+
+function get-existing-servers-from-host-xml() {
+
+    debug-arguments $@
+
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+    local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
+    [ -f ${host_xml_file} ] || fail "host.xml file ${host_xml_file} not found"
+    cat ${host_xml_file} | grep "^ *<server name=\".*\" group=\".*\".*>.*" | sed -e 's/.*name=\"\(.*\)\" group=\"\([^ ]*\)\".*$/\1:\2 /'
+}
+
+#
+# Add server name/server group to host.xml if it does not exist already
+#
+function add-server() {
+
+    debug-arguments $@
+
+    local server_name=$1
+    local server_group=$2
+
+    [ -z "${server_name}" ] && fail "'server_name' not provided"
+    [ -z "${server_group}" ] && fail "'server_group' not provided"
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
+
+    [ -f ${host_xml_file} ] || fail "host.xml file ${host_xml_file} not found"
+
+    if ! grep -q "^ *<server name=\""${server_name}"\" group=\""${server_group}"\".*" ${host_xml_file}; then
+        #
+        # add to the file
+        #
+        local n
+        n=$(last-line-containing "</server>" ${host_xml_file}) || exit 1
+        if [ -z "${n}" ]; then
+            # no </server>, look for <servers>
+            n=$(first-line-containing "<servers>" ${host_xml_file}) || exit 1
+        fi
+        local line="        <server name=\"${server_name}\" group=\"${server_group}\">"
+        insert-at-line ${n} "${line}" ${host_xml_file}
+        insert-at-line $(expr ${n} + 1) "        </server>" ${host_xml_file}
+        info "server ${server_name} of group ${server_group} added to ${host_xml_file}"
+    else
+        info "server ${server_name} of group ${server_group} already configured"
+    fi
+}
+
+#
+# gets server_name:server_group pairs
+#
+function remove-servers() {
+
+    debug-arguments $@
+
+    while [ -n "$1" ]; do
+        local server_name=${1%:*}
+        local server_group=${1#*:}
+        remove-server ${server_name} ${server_group}
+        shift
+    done
+}
+
+function remove-server() {
+
+    debug-arguments $@
+
+    local server_name=$1
+    local server_group=$2
+
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
+
+    [ -f ${host_xml_file} ] || fail "host.xml file ${host_xml_file} not found"
+
+    local n=$(first-line-containing "<server name=\""${server_name}"\" group=\""${server_group}"\"" ${host_xml_file})
+    debug "n: ${n}"
+
+    [ -z "${n}" ] && return 0
+
+    local tmp=$(unique-file)
+    if sed ${n}',/<\/server>/d' ${host_xml_file} > ${tmp}; then
+        mv ${tmp} ${host_xml_file} && info "removed server ${server_name}:${server_group} from ${host_xml_file}" || fail "failed to remove ${server_name}:${server_group} from ${host_xml_file}"
+    else
+        rm ${tmp}
+    fi
+}
+
+#
+# gets a topology string
+# <server-group-name1>:<server-name1>,<server-name2>,...;<server-group-name2>:<server-name3>,<server-name4>;...
+# and returns a space separated list of server group names at stdout
+#
+# Will fail on duplicate server group names.
+#
+function get-server-groups-from-topology-string() {
+
+    debug-arguments $@
+
+    local topology=$1
+
+    [ -z "${topology}" ] && fail "'topology' not provided"
+
+    local server_groups=""
+    local orig_topology=${topology}
+
+    while [ -n "${topology}" ]; do
+
+        local sg=${topology%%\%*}
+
+        if [[ "${topology}" =~ % ]]; then
+            topology=${topology#*\%}
+        else
+            topology="";
+        fi
+
+        if [[ ! "${sg}" =~ : ]]; then
+            fail "invalid server group specification \"${sg}\" in topology string \"${orig_topology}\""
+        fi
+
+        sg=${sg%:*}
+        debug "server group: ${sg}"
+        debug "topology: ${topology}"
+
+        #
+        # check for duplicates
+        #
+
+        [[ "${server_groups}" =~ ${sg} ]] && fail "duplicate server group name ${sg}"
+
+        [ "${server_groups}" = "" ] && server_groups="${sg}" || server_groups="${server_groups} ${sg}"
+
+    done
+
+    echo ${server_groups}
+}
+
+#
+# gets a server group name and a topology string
+# <server-group-name1>:<server-name1>,<server-name2>,...;<server-group-name2>:<server-name3>,<server-name4>;...
+# and returns a space separated list of server names in that server group at stdout
+#
+function get-servers-for-group() {
+
+    debug-arguments $@
+
+    local server_group_name=$1
+    local topology=$2
+
+    [ -z "${server_group_name}" ] && fail "'server_group_name' not provided"
+    [ -z "${topology}" ] && fail "'topology' not provided"
+
+    if [[ ! "${topology}" =~ ${server_group_name}: ]]; then
+        echo ""
+        return 0
+    fi
+
+    local servers=${topology#*${server_group_name}:}
+    servers=${servers%%\%*}
+    servers=${servers/,/ }
+    debug "servers: ${servers}"
+    echo "${servers}"
 }
 
 function compute-server-identity-secret-value() {

@@ -343,6 +343,62 @@ function replace-regex()
     mv ${tmp} ${file} && { debug "'${source_regex}' replaced in ${file}"; return 0; } || fail "failed to restore ${file}"
 }
 
+#
+# Insert the line at the specified line number.
+# arg 1: line number
+# arg 2: line.
+# arg 3: file
+function insert-at-line()
+{
+    local line_number=$1
+    local line=$2
+    local file=$3
+
+    local tmp=$(unique-file)
+    cat ${file} | sed -e ${line_number}'a\
+'"${line}" > ${tmp} || fail "fail to append to line ${line_number} in ${file}"
+    diff ${file} ${tmp} > /dev/null && { rm ${tmp}; debug "no insertion was made"; return 1; } # identical files, no replacement made
+    mv ${tmp} ${file} && { debug "line inserted at ${line_number} in ${file}"; return 0; } || fail "failed to restore ${file}"
+}
+
+#
+# Returns the number of the first line of the file containing the specified regular expressions.
+# arg 1: regular expression
+# arg 2: file
+#
+# return empty string if no such regex is found
+#
+function first-line-containing() {
+
+    local regex=$1
+    local file=$2
+
+    local line_number=$(grep -n -m 1 "${regex}" ${file})
+    line_number=${line_number%:*}
+    echo ${line_number}
+}
+
+#
+# Returns the number of the last line of the file containing the specified regular expressions.
+# arg 1: regular expression
+# arg 2: file
+#
+# return empty string if no such regex is found
+#
+function last-line-containing() {
+
+    debug-arguments $@
+
+    local regex=$1
+    local file=$2
+
+    local line_number=$(grep -n "${regex}" ${file} | tail -1)
+    line_number=${line_number%:*}
+
+    debug "last-line-containing: ${line_number}"
+    echo ${line_number}
+}
+
 ########################################################################################################################
 #
 ########################################################################################################################
