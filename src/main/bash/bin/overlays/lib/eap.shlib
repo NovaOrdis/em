@@ -446,7 +446,8 @@ function configure-topology() {
 
     debug-arguments $@
 
-    local topology=$1 # empty topology is permitted
+    local domain_controller_ip_address=$1 # empty domain controller is OK if the topology is empty
+    local topology=$2 # empty topology is permitted
 
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
 
@@ -457,11 +458,15 @@ function configure-topology() {
     local added_servers
 
     if [ -n "${topology}" ]; then
+
+        [ -z "${domain_controller_ip_address}" ] && fail "'domain_controller_ip_address' not provided"
+
         #
         # we want to add servers
         #
 
         local server_groups
+
         server_groups=$(get-server-groups-from-topology-string ${topology}) || exit 1
 
         local added_servers
@@ -477,6 +482,10 @@ function configure-topology() {
             #
             # check if the server group exists on the domain controller
             #
+
+            if ! is-valid-server-group-on-domain-controller ${domain_controller_ip_address} ${sg}; then
+                fail "${sg} is not a valid server group on the domain controller"
+            fi
 
             local server_names=$(get-servers-for-group ${sg} ${topology}) || exit 1
 
@@ -524,6 +533,26 @@ function get-existing-servers-from-host-xml() {
     local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
     [ -f ${host_xml_file} ] || fail "host.xml file ${host_xml_file} not found"
     cat ${host_xml_file} | grep "^ *<server name=\".*\" group=\".*\".*>.*" | sed -e 's/.*name=\"\(.*\)\" group=\"\([^ ]*\)\".*$/\1:\2 /'
+}
+
+#
+# will return 0 if the server group is valid (exists on the domain controller) or 1 if the server group does not exist
+# on the domain controller
+#
+function is-valid-server-group-on-domain-controller() {
+
+    local domain_controller_ip_address=$1
+    local server_group=$2
+
+    local output=$(jboss-cli "ls /server-group" ${domain_controller_ip_address}:9999 "admin" "admin123") || exit 1
+    local server_groups=$(echo ${output} | sed -e 's/^.*ls \/server-group \(.*\) \[.*$/\1/') || exit 1
+    debug "server_groups: ${server_groups}"
+    local sg
+    for sg in ${server_groups}; do
+        [ "${sg}" = "${server_group}" ] && { debug "${server_group} is a valid server group"; return 0; }
+    done
+    debug "${server_group} is NOT a valid server group"
+    return 1
 }
 
 #
@@ -792,7 +821,12 @@ EOF
 }
 
 #
-# Connects locally and executes the given command. It needs the instance to be up and running.
+# Connects locally or remotely and executes the given command. It needs the target instance to be up and running.
+#
+# arg1 - the command
+# arg2 - the host:port if not local invocation (empty if local invocation)
+# arg3 - username (empty if local invocation)
+# arg4 - password (empty if local invocation)
 #
 function jboss-cli() {
 
@@ -800,16 +834,30 @@ function jboss-cli() {
 
     local command=$1
     [ -z "${command}" ] && fail "'command' not provided"
+
+    local host_and_port=$2
+    local username=$3
+    local password=$4
+
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
 
+    local connect_args;
+
+    if [ -n "${host_and_port}" ]; then
+        connect_args="--connect --controller=${host_and_port} --user=${username} --password=${password}"
+    else
+        connect_args="-c"
+    fi
+
     local output
-    if output=$(${JBOSS_HOME}/bin/jboss-cli.sh -c <<EOF
+    if output=$(${JBOSS_HOME}/bin/jboss-cli.sh ${connect_args} <<EOF
 ${command}
 EOF
 ); then
         # success
-        debug "${output}"
+        debug "CLI invocation success: ${output}"
+        echo ${output}
    else
-        fail "failed to execute local JBoss CLI command: ${output}"
+        fail "failed to execute JBoss CLI ${connect_args} command: ${output}"
    fi
 }

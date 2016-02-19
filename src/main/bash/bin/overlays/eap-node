@@ -48,12 +48,12 @@ if [ -z "${WE_ARE_EAP_DOMAIN_CONTROLLER}" ]; then
         ${domain_controller_ip_address} ${domain_controller_name}
 
     topology=$(extract-from-overlay-args "topology" ${args}) || exit 1
-    configure-topology ${topology}
+    configure-topology ${domain_controller_ip_address} ${topology}
 
 else
 
     #
-    # we are the domain controller
+    # we are the domain controller, we usually don't want server nodes running on the domain controller
     #
 
     configure-topology "" # no arguments means remove all existing topology
