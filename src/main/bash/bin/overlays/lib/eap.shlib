@@ -944,7 +944,10 @@ function remove-element() {
 # End of Logic that modifies XML lists based on external (command-line) specifications.
 ########################################################################################################################
 
-function add-jvm-sizes() {
+#
+# configures existing server groups, adds socket-binding-group and jvm definitions.
+#
+function configure-server-groups() {
 
     debug-arguments $@
 
@@ -970,15 +973,26 @@ function add-jvm-sizes() {
 
     local name
     for name in ${server_group_names}; do
+
         debug "name: ${name}"
+
         local n
+
         n=$(first-line-containing "<server-group name=\"${name}\"" ${domain_xml})
+
+        local server_group_definition=$(line-at ${n} ${domain_xml})
+        debug "server group definition: ${server_group_definition}"
+        local profile_name=${server_group_definition#*profile=\"}
+        profile_name=${profile_name%%\"*}
+        debug "profile name: ${profile_name}"
+
         local line_where_jvm_should_be=$(expr ${n} + 1)
         local line=$(line-at ${line_where_jvm_should_be} ${domain_xml})
         if [[ ${line} =~ '<jvm name=' ]]; then
             debug "<jvm ...> definition already present, moving onto the next server group"
             continue;
         fi
+
         debug "inserting jvm specification at line ${n} ..."
         local tmp=$(unique-file)
         cat ${domain_xml} | sed -e ${n}'a\
@@ -987,5 +1001,15 @@ function add-jvm-sizes() {
             </jvm>' > ${tmp} || fail "fail to append to line ${n} in ${domain_xml}"
         diff ${tmp} ${domain_xml} > /dev/null && { rm ${tmp}; debug "no insertion was made"; return 1; } # identical files, no replacement made
         mv ${tmp} ${domain_xml} && info "added <jvm> specification at line ${n} in ${domain_xml}" || fail "failed to restore ${domain_xml}"
+
+        #<socket-binding-group ref="full-ha-sockets"/>
+        n=$(expr ${n} + 3)
+        debug "inserting socket-binding-group specification at line ${n} ..."
+        tmp=$(unique-file)
+        cat ${domain_xml} | sed -e ${n}'a\
+            <socket-binding-group ref="'${profile_name}'-sockets"/>' > ${tmp} || fail "fail to append to line ${n} in ${domain_xml}"
+        diff ${tmp} ${domain_xml} > /dev/null && { rm ${tmp}; debug "no insertion was made"; return 1; } # identical files, no replacement made
+        mv ${tmp} ${domain_xml} && info "added <socket-binding-group> specification at line ${n} in ${domain_xml}" || fail "failed to restore ${domain_xml}"
+
     done
 }

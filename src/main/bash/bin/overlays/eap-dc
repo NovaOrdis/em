@@ -40,7 +40,7 @@ overlay-preconditions
 configure-management-interface $(get-primary-ip)
 server_groups=$(extract-from-overlay-args "server-groups" ${args}) || exit 1
 update-server-group-list-in-domain-xml ${server_groups}
-add-jvm-sizes ${server_groups}
+configure-server-groups ${server_groups}
 
 exit 0
 

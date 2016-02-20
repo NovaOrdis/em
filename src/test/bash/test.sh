@@ -7,6 +7,6 @@ lib=$(dirname $0)/../../main/bash/bin/overlays/lib/eap.shlib; [ -f ${lib} ] && .
 
 verbose=true
 
-out=$(get-element-names-corresponding-to-attribute "XXX" "a:AAA,b:XXX,c:CCC,d:XXX,e:MMM,f:XXX,b:XXX")
-echo ">${out}<"
-
+line="        <server-group name=\"web\" profile=\"ha\">"
+profile_name=${line##*profile=\"}
+echo "${profile_name}"
