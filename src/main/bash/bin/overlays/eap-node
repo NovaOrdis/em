@@ -47,8 +47,8 @@ if [ -z "${WE_ARE_EAP_DOMAIN_CONTROLLER}" ]; then
     establish-subordinate-host-controller-identity-on-domain-controller \
         ${domain_controller_ip_address} ${domain_controller_name}
 
-    topology=$(extract-from-overlay-args "topology" ${args}) || exit 1
-    configure-topology ${domain_controller_ip_address} ${topology}
+    servers=$(extract-from-overlay-args "servers" ${args}) || exit 1
+    update-server-list-in-host-xml ${domain_controller_ip_address} ${servers}
 
 else
 
@@ -56,7 +56,7 @@ else
     # we are the domain controller, we usually don't want server nodes running on the domain controller
     #
 
-    configure-topology "" # no arguments means remove all existing topology
+    update-xml-list domain/configuration/host.xml "" # no arguments means remove all existing topology
 fi
 
 configure-eap-to-start-at-boot

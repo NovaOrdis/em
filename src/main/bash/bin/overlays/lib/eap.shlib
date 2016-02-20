@@ -220,17 +220,25 @@ function configure-host.xml-host-name() {
     return 1
 }
 
+#
+# Modifies the <server-groups> section of the domain controller's domain.xml based on the
+# "--server-groups" command line specification
+#
 function configure-server-groups() {
 
     debug-arguments $@
+
+    local server_groups=$1 # empty is not acceptable - we cannot have no server groups
+    [ -z "${server_groups}" ] && fail "'server_groups' not provided"
+
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+    local domain_xml_file=${JBOSS_HOME}/domain/configuration/domain.xml
+    [ -f ${domain_xml_file} ] || fail "${domain_xml_file} does not exist"
 
     #
     # just a hack now, reduce the memory size so we can start it on small Amazon EC2 instances
     #
 
-    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
-    local domain_xml_file=${JBOSS_HOME}/domain/configuration/domain.xml
-    [ -f ${domain_xml_file} ] || fail "${domain_xml_file} does not exist"
 
     local size=200m
 
@@ -240,72 +248,9 @@ function configure-server-groups() {
         return 0
     fi
 
+
+
     return 1
-}
-
-#
-# configure the "servers" definition in host.xml
-#
-# return 0 if the function changed state or 1 if not
-function configure-servers() {
-
-    debug-arguments $@
-
-    local server_count=$1
-
-    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
-    local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
-    [ -f ${host_xml_file} ] || fail "${host_xml_file} does not exist"
-    [ -z "${server_count}" ] && fail "no server count specified"
-
-    local changes=false
-
-
-    #
-    # make a copy of the original file, unless it already exists
-    #
-
-    if ! ls $(dirname ${host_xml_file})/$(basename ${host_xml_file})-* 2>/dev/null 1>&2; then
-        #
-        # backup file does not exist
-        #
-        local extension=$(date +'%y.%m.%d.%H.%M.%S')
-        if cp ${host_xml_file} $(dirname ${host_xml_file})/$(basename ${host_xml_file})-${extension}; then
-            info "backed up ${host_xml_file} as $(basename ${host_xml_file})-${extension}"
-            changes=true
-        fi
-    fi
-
-    #
-    # currently just a hack now, eliminate all servers
-    #
-
-    if [ "${server_count}" = "0" ]; then
-
-        local line_number_from
-        line_number_from=$(grep -n "<servers>" ${host_xml_file}) || fail "did not find <servers> in ${host_xml_file}"
-        line_number_from=${line_number_from%%:*}
-        line_number_from=$(expr ${line_number_from} + 1)
-
-        local line_number_to
-        line_number_to=$(grep -n "</servers>" ${host_xml_file}) || fail "did not find </servers> in ${host_xml_file}"
-        line_number_to=${line_number_to%%:*}
-        line_number_to=$(expr ${line_number_to} - 1)
-
-        if [ ${line_number_from} -le ${line_number_to} ]; then
-            # there are lines to delete
-            local tmp=$(unique-file)
-            sed ${line_number_from}','${line_number_to}'d' ${host_xml_file} > ${tmp}
-            diff ${host_xml_file} ${tmp} > /dev/null && { rm ${tmp}; debug "no deletion occurred in ${host_xml_file}"; return 1; }
-            mv ${tmp} ${host_xml_file} || fail "failed to restore ${host_xml_file}"
-            info "edited <servers> section in ${host_xml_file}"
-            changes=true
-        fi
-    else
-        fail "non-zero server count not implemented yet"
-    fi
-
-    ${changes} && return 0 || return 1
 }
 
 #
@@ -433,280 +378,6 @@ function establish-subordinate-host-controller-identity-on-domain-controller() {
             info "inserted server identity into ${host_xml_file}" || \
             fail "failed to restore ${host_xml_file}"
     fi
-}
-
-#
-# gets a topology string
-# (<server-group-name1>:<server-name1>,<server-name2>,...;<server-group-name2>:<server-name3>,<server-name4>;...) and
-# updates host.xml with the topology, after verifying that the server groups exist on the domain controller.
-#
-# empty topology string is permitted, it means: remove existing topology
-#
-function configure-topology() {
-
-    debug-arguments $@
-
-    local domain_controller_ip_address=$1 # empty domain controller is OK if the topology is empty
-    local topology=$2 # empty topology is permitted
-
-    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
-
-    local existing_servers
-    existing_servers=$(get-existing-servers-from-host-xml)
-    debug "existing_servers: ${existing_servers}"
-
-    local added_servers
-
-    if [ -n "${topology}" ]; then
-
-        [ -z "${domain_controller_ip_address}" ] && fail "'domain_controller_ip_address' not provided"
-
-        #
-        # we want to add servers
-        #
-
-        local server_groups
-
-        server_groups=$(get-server-groups-from-topology-string ${topology}) || exit 1
-
-        local added_servers
-
-        #
-        # add the requested server groups
-        #
-
-        for sg in ${server_groups}; do
-
-            debug "processing topology server group ${sg}"
-
-            #
-            # check if the server group exists on the domain controller
-            #
-
-            if ! is-valid-server-group-on-domain-controller ${domain_controller_ip_address} ${sg}; then
-                fail "${sg} is not a valid server group on the domain controller"
-            fi
-
-            local server_names=$(get-servers-for-group ${sg} ${topology}) || exit 1
-
-            debug "adding servers ${server_names} to server group ${sg}"
-
-            for sn in ${server_names}; do
-                debug "server name: ${sn} server group name: ${sg}"
-                add-server ${sn} ${sg}
-                added_servers="${added_servers} ${sn}:${sg}"
-            done
-        done
-
-        debug "added_servers: ${added_servers}"
-    fi
-
-    #
-    # remove the extra servers
-    #
-    local servers_to_remove
-
-    for es in ${existing_servers}; do
-        local added=false
-        for as in ${added_servers}; do
-            if [ "${es}" = "${as}" ]; then
-                added=true;
-                break;
-            fi
-        done
-
-        if ! ${added}; then
-            servers_to_remove="${servers_to_remove} ${es}"
-        fi
-    done
-
-    debug "servers_to_remove: ${servers_to_remove}"
-
-    remove-servers ${servers_to_remove}
-}
-
-function get-existing-servers-from-host-xml() {
-
-    debug-arguments $@
-
-    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
-    local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
-    [ -f ${host_xml_file} ] || fail "host.xml file ${host_xml_file} not found"
-    cat ${host_xml_file} | grep "^ *<server name=\".*\" group=\".*\".*>.*" | sed -e 's/.*name=\"\(.*\)\" group=\"\([^ ]*\)\".*$/\1:\2 /'
-}
-
-#
-# will return 0 if the server group is valid (exists on the domain controller) or 1 if the server group does not exist
-# on the domain controller
-#
-function is-valid-server-group-on-domain-controller() {
-
-    local domain_controller_ip_address=$1
-    local server_group=$2
-
-    local output=$(jboss-cli "ls /server-group" ${domain_controller_ip_address}:9999 "admin" "admin123") || exit 1
-    local server_groups=$(echo ${output} | sed -e 's/^.*ls \/server-group \(.*\) \[.*$/\1/') || exit 1
-    debug "server_groups: ${server_groups}"
-    local sg
-    for sg in ${server_groups}; do
-        [ "${sg}" = "${server_group}" ] && { debug "${server_group} is a valid server group"; return 0; }
-    done
-    debug "${server_group} is NOT a valid server group"
-    return 1
-}
-
-#
-# Add server name/server group to host.xml if it does not exist already
-#
-function add-server() {
-
-    debug-arguments $@
-
-    local server_name=$1
-    local server_group=$2
-
-    [ -z "${server_name}" ] && fail "'server_name' not provided"
-    [ -z "${server_group}" ] && fail "'server_group' not provided"
-    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
-
-    local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
-
-    [ -f ${host_xml_file} ] || fail "host.xml file ${host_xml_file} not found"
-
-    if ! grep -q "^ *<server name=\""${server_name}"\" group=\""${server_group}"\".*" ${host_xml_file}; then
-        #
-        # add to the file
-        #
-        local n
-        n=$(last-line-containing "</server>" ${host_xml_file}) || exit 1
-        if [ -z "${n}" ]; then
-            # no </server>, look for <servers>
-            n=$(first-line-containing "<servers>" ${host_xml_file}) || exit 1
-        fi
-        local line="        <server name=\"${server_name}\" group=\"${server_group}\">"
-        insert-at-line ${n} "${line}" ${host_xml_file}
-        insert-at-line $(expr ${n} + 1) "        </server>" ${host_xml_file}
-        info "server ${server_name} of group ${server_group} added to ${host_xml_file}"
-    else
-        info "server ${server_name} of group ${server_group} already configured"
-    fi
-}
-
-#
-# gets server_name:server_group pairs
-#
-function remove-servers() {
-
-    debug-arguments $@
-
-    while [ -n "$1" ]; do
-        local server_name=${1%:*}
-        local server_group=${1#*:}
-        remove-server ${server_name} ${server_group}
-        shift
-    done
-}
-
-function remove-server() {
-
-    debug-arguments $@
-
-    local server_name=$1
-    local server_group=$2
-
-    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
-
-    local host_xml_file=${JBOSS_HOME}/domain/configuration/host.xml
-
-    [ -f ${host_xml_file} ] || fail "host.xml file ${host_xml_file} not found"
-
-    local n=$(first-line-containing "<server name=\""${server_name}"\" group=\""${server_group}"\"" ${host_xml_file})
-    debug "n: ${n}"
-
-    [ -z "${n}" ] && return 0
-
-    local tmp=$(unique-file)
-    if sed ${n}',/<\/server>/d' ${host_xml_file} > ${tmp}; then
-        mv ${tmp} ${host_xml_file} && info "removed server ${server_name}:${server_group} from ${host_xml_file}" || fail "failed to remove ${server_name}:${server_group} from ${host_xml_file}"
-    else
-        rm ${tmp}
-    fi
-}
-
-#
-# gets a topology string
-# <server-group-name1>:<server-name1>,<server-name2>,...;<server-group-name2>:<server-name3>,<server-name4>;...
-# and returns a space separated list of server group names at stdout
-#
-# Will fail on duplicate server group names.
-#
-function get-server-groups-from-topology-string() {
-
-    debug-arguments $@
-
-    local topology=$1
-
-    [ -z "${topology}" ] && fail "'topology' not provided"
-
-    local server_groups=""
-    local orig_topology=${topology}
-
-    while [ -n "${topology}" ]; do
-
-        local sg=${topology%%\%*}
-
-        if [[ "${topology}" =~ % ]]; then
-            topology=${topology#*\%}
-        else
-            topology="";
-        fi
-
-        if [[ ! "${sg}" =~ : ]]; then
-            fail "invalid server group specification \"${sg}\" in topology string \"${orig_topology}\""
-        fi
-
-        sg=${sg%:*}
-        debug "server group: ${sg}"
-        debug "topology: ${topology}"
-
-        #
-        # check for duplicates
-        #
-
-        [[ "${server_groups}" =~ ${sg} ]] && fail "duplicate server group name ${sg}"
-
-        [ "${server_groups}" = "" ] && server_groups="${sg}" || server_groups="${server_groups} ${sg}"
-
-    done
-
-    echo ${server_groups}
-}
-
-#
-# gets a server group name and a topology string
-# <server-group-name1>:<server-name1>,<server-name2>,...;<server-group-name2>:<server-name3>,<server-name4>;...
-# and returns a space separated list of server names in that server group at stdout
-#
-function get-servers-for-group() {
-
-    debug-arguments $@
-
-    local server_group_name=$1
-    local topology=$2
-
-    [ -z "${server_group_name}" ] && fail "'server_group_name' not provided"
-    [ -z "${topology}" ] && fail "'topology' not provided"
-
-    if [[ ! "${topology}" =~ ${server_group_name}: ]]; then
-        echo ""
-        return 0
-    fi
-
-    local servers=${topology#*${server_group_name}:}
-    servers=${servers%%\%*}
-    servers=${servers/,/ }
-    debug "servers: ${servers}"
-    echo "${servers}"
 }
 
 function compute-server-identity-secret-value() {
@@ -861,3 +532,403 @@ EOF
         fail "failed to execute JBoss CLI ${connect_args} command: ${output}"
    fi
 }
+
+########################################################################################################################
+# Logic that modifies XML lists based on external (command-line) specifications. Used to modify:
+#
+# domain.xml:
+#
+#   <server-groups>
+#      <server-group name="G1" profile="full">
+#         ...
+#      </server-group>
+#      <server-group name="G2" profile="full-ha">
+#         ...
+#      </server-group>
+#      <server-group name="G3" profile="ha">
+#         ...
+#      </server-group>
+#      <server-group name="G4" profile="full">
+#         ...
+#      </server-group>
+#   </server-groups>
+#
+# host.xml:
+#
+#     <servers>
+#        <server name="s1" group="G1" ...>
+#        </server>
+#        <server name="s2" group="G2" ...>
+#        </server>
+#        <server name="s3" group="G3" ...>
+#        </server>
+#        <server name="s4" group="G4" ...>
+#        </server>
+#        <server name="s5" group="G1" ...>
+#        </server>
+#     </servers>
+#
+########################################################################################################################
+
+
+function update-server-list-in-host-xml() {
+
+    debug-arguments $@
+
+    local domain_controller_ip_address=$1
+    local servers=$2
+
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    update-xml-list ${JBOSS_HOME}/domain/configuration/host.xml ${domain_controller_ip_address} ${servers}
+}
+
+#
+# Gets a list content specification as string:
+#
+# name:second-attr,name:second-attr,name:second-attr
+#
+# host.xml "<servers>" example:
+#   <server-name1>:<server-group-name1>,<server-name2>:<server-group-name2> ...
+#
+# domain.xml "<server-groups>" example:
+#   <server-group-name1>:<profile-name1>, <server-group-name2>:<profile-name2>
+#
+#
+# (...)
+# and updates the list in the specified file, after applying consistency checks.
+#
+# Empty list content specification string is permitted, it means: clear the list.
+#
+function update-xml-list() {
+
+    debug-arguments $@
+
+    local xml_file=$1
+    local domain_controller_ip_address=$2 # empty domain controller is OK if the list_content_spec is empty
+    local list_content_spec=$3 # empty list_content_spec is permitted
+
+    [ -z "${xml_file}" ] && fail "'xml_file' not provided"
+
+    local element="server"
+    local list_container_element="servers"
+    local attribute_name="group"
+    local existing_elements_as_pairs
+    existing_elements_as_pairs=$(get-existing-elements-from-list-as-pairs ${xml_file} ${element} "name" ${attribute_name}) || exit 1
+
+    debug "existing elements: ${existing_elements_as_pairs}"
+
+    local added_elements
+
+    if [ -n "${list_content_spec}" ]; then
+
+        #
+        # there are list elements to add
+        #
+
+        local attribute_values
+
+        attribute_values=$(get-attributes ${list_content_spec}) || exit 1
+
+        local added_elements
+
+        for a in ${attribute_values}; do
+
+            debug "processing ${attribute_name} ${a}"
+
+            #
+            # check if the attribute value is valid
+            #
+
+            if ! is-valid-attribute-value ${attribute_name} ${a} ${domain_controller_ip_address} ; then
+                fail "${a} is not a valid ${attribute_name}"
+            fi
+
+            local element_names=$(get-element-names-corresponding-to-attribute ${a} ${list_content_spec}) || exit 1
+
+            debug "adding ${element} ${element_names} to ${attribute_name} ${a}"
+
+            for n in ${element_names}; do
+                debug "${element} name: ${n} ${attribute_name}: ${a}"
+                add-xml-list-element ${xml_file} ${list_container_element} ${element} ${attribute_name} ${n} ${a}
+                added_elements="${added_elements} ${n}:${a}"
+            done
+        done
+
+        debug "added elements: ${added_elements}"
+    fi
+
+    #
+    # remove the extra elements
+    #
+
+    local elements_to_remove
+
+    for ep in ${existing_elements_as_pairs}; do
+        local added=false
+        for ap in ${added_elements}; do
+            if [ "${ep}" = "${ap}" ]; then
+                added=true;
+                break;
+            fi
+        done
+
+        if ! ${added}; then
+            elements_to_remove="${elements_to_remove} ${ep}"
+        fi
+    done
+
+    debug "elements to remove: ${elements_to_remove}"
+
+    remove-elements ${xml_file} ${element} ${attribute_name} ${elements_to_remove}
+}
+
+#
+# return at <name-value>:<attribute-value> at stdout, on multiple lines
+#
+function get-existing-elements-from-list-as-pairs() {
+
+    debug-arguments $@
+
+    local xml_file=$1
+    local element=$2 # the XML element that contains the "name" and the other attribute
+    local name_attribute_name=$3 # the name of the attribute that contains the name (usually "name")
+    local the_other_attribute_name=$4 # the name of the attribute that contains the other piece of the pair (example "group")
+
+    [ -z "${xml_file}" ] && fail "'xml_file' not provided"
+    [ -z "${element}" ] && fail "'element' not provided"
+    [ -z "${name_attribute_name}" ] && fail "'name_attribute_name' not provided"
+    [ -z "${the_other_attribute_name}" ] && fail "'the_other_attribute_name' not provided"
+    [ -f ${xml_file} ] || fail "${xml_file} not found"
+
+    cat ${xml_file} | \
+        grep "^ *<${element} ${name_attribute_name}=\".*\" ${the_other_attribute_name}=\".*\".*>.*" | \
+        sed -e 's/.*'${name_attribute_name}'=\"\(.*\)\" '${the_other_attribute_name}'=\"\([^ ]*\)\".*$/\1:\2 /'
+}
+
+#
+# Returns at stdout a space separated list containing unique attribute values extracted from the given specification
+# list: <name1>:<attribute-value1>,<name2>:<attribute-value2>,...
+#
+function get-attributes() {
+
+    debug-arguments $@
+
+    local list=$1
+
+    [ -z "${list}" ] && fail "'list' not provided"
+
+    local orig_list=${list}
+    local attributes=""
+
+    while [ -n "${list}" ]; do
+
+        local pair=${list%%,*}
+
+        if [[ "${list}" =~ , ]]; then
+            list=${list#*,}
+        else
+            list="";
+        fi
+
+        if [[ ! "${pair}" =~ : ]]; then
+            fail "invalid list element pair \"${pair}\" in list \"${orig_list}\", it does not contain ':'"
+        fi
+
+        local attribute=${pair#*:}
+        debug "attribute: ${attribute}"
+        debug "list: ${list}"
+
+        if [[ ! "${attributes}" =~ ${attribute}' ' ]]; then
+
+            #
+            # not a duplicate, add to the list
+            #
+            attributes="${attributes}${attribute} "
+        fi
+    done
+
+    echo ${attributes}
+}
+
+#
+# will return 0 if the attribute value is valid or 1 if not
+#
+function is-valid-attribute-value() {
+
+    debug-arguments $@
+
+    local attribute_name=$1
+    local attribute_value=$2
+    local domain_controller_ip_address=$3
+
+    if [ "${attribute_name}" = "group" ]; then
+        is-valid-server-group ${attribute_value} ${domain_controller_ip_address}
+    else
+        fail "we don't know how to verify a '${attribute_name}' attribute value"
+    fi
+}
+
+#
+# will return 0 if the server group is valid (exists on the domain controller) or 1 if the server group does not exist
+# on the domain controller
+#
+function is-valid-server-group() {
+
+    local server_group=$1
+    local domain_controller_ip_address=$2
+
+    local output=$(jboss-cli "ls /server-group" ${domain_controller_ip_address}:9999 "admin" "admin123") || exit 1
+    local server_groups=$(echo ${output} | sed -e 's/^.*ls \/server-group \(.*\) \[.*$/\1/') || exit 1
+    debug "server_groups: ${server_groups}"
+    local sg
+    for sg in ${server_groups}; do
+        [ "${sg}" = "${server_group}" ] && { debug "${server_group} is a valid server group"; return 0; }
+    done
+    debug "${server_group} is NOT a valid server group"
+    return 1
+}
+
+#
+# Given a specification list <name1>:<attribute-value1>,<name2>:<attribute-value2>,..., returns a space separated
+# list containing all elements names corresponding to a specific attribute value. It coalesces duplicates.
+#
+function get-element-names-corresponding-to-attribute() {
+
+    debug-arguments $@
+
+    local attr_value=$1
+    local list=$2
+
+    [ -z "${attr_value}" ] && fail "'value' not provided"
+    [ -z "${list}" ] && fail "'list' not provided"
+
+    if [[ ! "${list}" =~ :${value} ]]; then
+        echo ""
+        return 0
+    fi
+
+    IFS=","
+    set ${list}
+    IFS=" "
+
+    local name
+    local value
+    local result
+    while [ -n "$1" ]; do
+        name=${1%:*}
+        value=${1#*:}
+        shift
+        debug "name: ${name}, value: ${value}"
+        if [ "${attr_value}" != "${value}" ]; then
+            continue;
+        fi
+
+        if [[ "${result}" =~ ${name}' ' ]]; then
+            # duplicate
+            continue
+        fi
+
+        result="${result}${name} "
+    done
+
+    echo ${result}
+}
+
+#
+# Add the XML element to the list if it does not exist already
+#
+function add-xml-list-element() {
+
+    debug-arguments $@
+
+    local xml_file=$1
+    local list_container_element=$2 # ex: servers
+    local element=$3 # ex: server
+    local attribute_name=$4 # ex: group
+    local element_name=$5
+    local attribute_value=$6
+
+    [ -z "${xml_file}" ] && fail "'xml_file' not provided"
+    [ -z "${list_container_element}" ] && fail "'container_element' not provided"
+    [ -z "${element}" ] && fail "'element' not provided"
+    [ -z "${attribute_name}" ] && fail "'attribute_name' not provided"
+    [ -z "${element_name}" ] && fail "'element_name' not provided"
+    [ -z "${attribute_value}" ] && fail "'attribute_value' not provided"
+
+    [ -f ${xml_file} ] || fail "XML file ${xml_file} not found"
+
+    if ! grep -q "^ *<${element} name=\""${element_name}"\" ${attribute_name}=\""${attribute_value}"\".*" ${xml_file}; then
+
+        #
+        # add to the file
+        #
+
+        local n
+        n=$(last-line-containing "</${element}>" ${xml_file}) || exit 1
+        if [ -z "${n}" ]; then
+            # no </server>, look for <servers>
+            n=$(first-line-containing "<${list_container_element}>" ${xml_file}) || exit 1
+        fi
+        local line="        <${element} name=\"${element_name}\" ${attribute_name}=\"${attribute_value}\">"
+        insert-at-line ${n} "${line}" ${xml_file}
+        insert-at-line $(expr ${n} + 1) "        </${element}>" ${xml_file}
+        info "${element} ${element_name} of ${attribute_name} ${attribute_value} added to ${xml_file}"
+    else
+        info "${element} ${element_name} of ${attribute_name} ${attribute_value} already configured"
+    fi
+}
+
+#
+# gets element_name:attribute_value pairs
+#
+function remove-elements() {
+
+    debug-arguments $@
+
+    local xml_file=$1
+    shift
+    local element=$1
+    shift
+    local attribute_name=$1
+    shift
+
+    while [ -n "$1" ]; do
+        local element_name=${1%:*}
+        local attribute_value=${1#*:}
+        remove-element ${xml_file} ${element} ${attribute_name} ${element_name} ${attribute_value}
+        shift
+    done
+}
+
+function remove-element() {
+
+    debug-arguments $@
+
+    local xml_file=$1
+    local element=$2
+    local attribute_name=$3
+    local element_name=$4
+    local attribute_value=$5
+
+    [ -f ${xml_file} ] || fail "${xml_file} not found"
+
+    local n=$(first-line-containing "<${element} name=\""${element_name}"\" ${attribute_name}=\""${attribute_value}"\"" ${xml_file})
+    debug "n: ${n}"
+
+    [ -z "${n}" ] && return 0
+
+    local tmp=$(unique-file)
+    if sed ${n}',/<\/'${element}'>/d' ${xml_file} > ${tmp}; then
+        mv ${tmp} ${xml_file} && \
+            info "removed ${element} ${element_name} ${attribute_name} ${attribute_value} from ${xml_file}" || \
+            fail "failed to remove ${element} ${element_name} ${attribute_name} ${attribute_value} from ${xml_file}"
+    else
+        rm ${tmp}
+    fi
+}
+
+
+
+
+

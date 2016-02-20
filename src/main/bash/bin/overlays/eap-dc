@@ -38,7 +38,9 @@ process-overlay-arguments $@
 overlay-preconditions
 
 configure-management-interface $(get-primary-ip)
-configure-server-groups
+server_groups_specification=$(extract-from-overlay-args "server-groups" ${args}) || exit 1
+configure-server-groups ${server_groups_specification}
+
 
 exit 0
 
