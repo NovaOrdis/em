@@ -399,6 +399,21 @@ function last-line-containing() {
     echo ${line_number}
 }
 
+#
+# returns the line with the specified line number at stdout (or empty string if no such line exists)
+#
+function line-at() {
+
+    debug-arguments $@
+
+    local line_number=$1
+    local file=$2
+
+    [ -f ${file} ] || fail "file ${file} not found"
+
+    sed -n ${line_number}'p' ${file}
+}
+
 ########################################################################################################################
 #
 ########################################################################################################################

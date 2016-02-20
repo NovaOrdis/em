@@ -248,8 +248,6 @@ function configure-server-groups() {
         return 0
     fi
 
-
-
     return 1
 }
 
@@ -570,19 +568,31 @@ EOF
 #
 ########################################################################################################################
 
-
 function update-server-list-in-host-xml() {
 
     debug-arguments $@
 
-    local domain_controller_ip_address=$1
-    local servers=$2
+    local servers=$1
+    local domain_controller_ip_address=$2
 
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
 
-    update-xml-list ${JBOSS_HOME}/domain/configuration/host.xml ${domain_controller_ip_address} ${servers}
+    update-xml-list ${JBOSS_HOME}/domain/configuration/host.xml "servers" "server" "group" ${servers} ${domain_controller_ip_address}
 }
 
+function update-server-group-list-in-domain-xml() {
+
+    debug-arguments $@
+
+    local server_groups=$1
+    local domain_controller_ip_address=$2
+
+    [ -z "${server_groups}" ] && fail "no --server-groups=server-group-name:profile,... specification, cannot build a domain controller without any server groups"
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    update-xml-list ${JBOSS_HOME}/domain/configuration/domain.xml "server-groups" "server-group" "profile" ${server_groups} ${domain_controller_ip_address}
+
+}
 #
 # Gets a list content specification as string:
 #
@@ -605,14 +615,14 @@ function update-xml-list() {
     debug-arguments $@
 
     local xml_file=$1
-    local domain_controller_ip_address=$2 # empty domain controller is OK if the list_content_spec is empty
-    local list_content_spec=$3 # empty list_content_spec is permitted
+    local list_container_element=$2
+    local element=$3
+    local attribute_name=$4
+    local list_content_spec=$5 # empty list_content_spec is permitted
+    local domain_controller_ip_address=$6 # empty domain controller is permitted
 
     [ -z "${xml_file}" ] && fail "'xml_file' not provided"
 
-    local element="server"
-    local list_container_element="servers"
-    local attribute_name="group"
     local existing_elements_as_pairs
     existing_elements_as_pairs=$(get-existing-elements-from-list-as-pairs ${xml_file} ${element} "name" ${attribute_name}) || exit 1
 
@@ -764,6 +774,8 @@ function is-valid-attribute-value() {
 
     if [ "${attribute_name}" = "group" ]; then
         is-valid-server-group ${attribute_value} ${domain_controller_ip_address}
+    elif [ "${attribute_name}" = "profile" ]; then
+        [ "ha" = "${attribute_value}" -o "full-ha" = "${attribute_value}" -o "full" = "${attribute_value}" -o "default" = "${attribute_value}" ] && return 0 || return 1
     else
         fail "we don't know how to verify a '${attribute_name}' attribute value"
     fi
@@ -928,7 +940,52 @@ function remove-element() {
     fi
 }
 
+########################################################################################################################
+# End of Logic that modifies XML lists based on external (command-line) specifications.
+########################################################################################################################
 
+function add-jvm-sizes() {
 
+    debug-arguments $@
 
+    local server_groups=$1
 
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    local domain_xml=${JBOSS_HOME}/domain/configuration/domain.xml
+
+    IFS=","
+    set ${server_groups}
+    IFS=" "
+
+    local server_group_names
+    while [ -n "$1" ]; do
+        local name=${1%:*}
+        shift
+        [[ "${server_group_names}" =~ ${name}' ' ]] && continue;
+        server_group_names="${server_group_names}${name} "
+    done
+
+    debug "server group names: ${server_group_names}"
+
+    local name
+    for name in ${server_group_names}; do
+        debug "name: ${name}"
+        local n
+        n=$(first-line-containing "<server-group name=\"${name}\"" ${domain_xml})
+        local line_where_jvm_should_be=$(expr ${n} + 1)
+        local line=$(line-at ${line_where_jvm_should_be} ${domain_xml})
+        if [[ ${line} =~ '<jvm name=' ]]; then
+            debug "<jvm ...> definition already present, moving onto the next server group"
+            continue;
+        fi
+        debug "inserting jvm specification at line ${n} ..."
+        local tmp=$(unique-file)
+        cat ${domain_xml} | sed -e ${n}'a\
+            <jvm name="default">\
+                <heap size="200m" max-size="200m"/>\
+            </jvm>' > ${tmp} || fail "fail to append to line ${n} in ${domain_xml}"
+        diff ${tmp} ${domain_xml} > /dev/null && { rm ${tmp}; debug "no insertion was made"; return 1; } # identical files, no replacement made
+        mv ${tmp} ${domain_xml} && info "added <jvm> specification at line ${n} in ${domain_xml}" || fail "failed to restore ${domain_xml}"
+    done
+}
