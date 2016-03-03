@@ -1,6 +1,6 @@
-#!/amazon.bin/bash
+#!/bin/bash
 #
-# EAP Installation
+# JBoss Installation
 #
 # Global variables
 #
@@ -13,45 +13,47 @@
 xms=512m
 xmx=512m
 maxPermSize=128m
-#eap_user=ec2-user
-eap_group=ec2-user
+#jboss_user=ec2-user
+jboss_group=ec2-user
 
 burn_in_dir=/tmp/.burn-in
 
-function install-eap
+function install-jboss
 {
     id=$1
-    eap_archive_file=$2
-    debug "install-eap(id=${id}, eap_archive_file=${eap_archive_file})"
+    jboss_archive_file=$2
+    debug "install-jboss(id=${id}, jboss_archive_file=${jboss_archive_file})"
     [ "${id}" = "" ] && { echo "'id' not specified" 1>&2; exit 1; }
-    [ "${eap_archive_file}" = "" ] && { echo "'eap_archive_file' not specified" 1>&2; exit 1; }
+    [ "${jboss_archive_file}" = "" ] && { echo "'jboss_archive_file' not specified" 1>&2; exit 1; }
 
     local archive_dir=/nfs/archive
     [ -d ${archive_dir} ] || { echo "${archive_dir} not a directory, was the NFS client activated?" 1>&2; exit 1; }
 
-    local eap_archive_path=${archive_dir}/${eap_archive_file}
-    [ -f ${eap_archive_path} ] || { echo "EAP archive ${eap_archive_path} does not exist" 1>&2; exit 1; }
+    local jboss_archive_path=${archive_dir}/${jboss_archive_file}
+    [ -f ${jboss_archive_path} ] || { echo "JBoss archive ${jboss_archive_path} does not exist" 1>&2; exit 1; }
+
+    local link_name=jboss
 
     #
-    # figure out if the EAP archive was expanded in place already
+    # figure out if the JBoss archive was expanded in place already
     #
 
-    local eap_top_dir_name
-    eap_top_dir_name=$(get-top-level-dir-in-zip-archive ${eap_archive_path}) || exit 1
+    local jboss_top_dir_name
+    jboss_top_dir_name=$(get-top-level-dir-in-zip-archive ${jboss_archive_path}) || exit 1
 
-    local eap_dir
-    eap_dir=/opt/${eap_top_dir_name}
+    local jboss_dir
+    jboss_dir=/opt/${jboss_top_dir_name}
 
-    if [ ! -d ${eap_dir} ]; then
+    if [ ! -d ${jboss_dir} ]; then
         # the directory is not there, unzip
-        (cd /opt; unzip -q ${eap_archive_path}) && echo "extracted EAP into /opt" || { echo "failed to extract EAP" 1>&2; exit 1; }
+        (cd /opt; unzip -q ${jboss_archive_path}) && echo "extracted JBoss into /opt" || { echo "failed to extract JBoss" 1>&2; exit 1; }
 
         # the top directory should have been created
-        [ -d ${eap_dir} ] || { echo "top level EAP directory ${eap_dir} was not created as expected" 1>&2; exit 1; }
+        [ -d ${jboss_dir} ] || { echo "top level JBoss directory ${jboss_dir} was not created as expected" 1>&2; exit 1; }
     fi
 
-    if [ ! -h /opt/eap ]; then
-        (cd /opt; ln -s ${eap_dir} eap) && echo "linked ${eap_dir} as /opt/eap" || { echo "failed to link ${eap_dir} as /opt/eap" 1>&2; exit 1; }
+    if [ ! -h /opt/${link_name} ]; then
+        (cd /opt; ln -s ${jboss_dir} ${link_name}) && echo "linked ${jboss_dir} as /opt/${link_name}" || { echo "failed to link ${jboss_dir} as /opt/${link_name}" 1>&2; exit 1; }
     fi
 
     # update root's and ec2-user's .bashrc
@@ -59,9 +61,9 @@ function install-eap
     local users="ec2-user root"
     for user in ${users}; do
         local bashrc_file=$(get-home-dir ${user})/.bashrc
-        if ! grep -q "export JBOSS_HOME=/opt/eap" ${bashrc_file}; then
+        if ! grep -q "export JBOSS_HOME=/opt/${link_name}" ${bashrc_file}; then
             echo "" >> ${bashrc_file}
-            echo "export JBOSS_HOME=/opt/eap" >> ${bashrc_file} && echo "updated ${bashrc_file} with JBOSS_HOME"
+            echo "export JBOSS_HOME=/opt/${link_name}" >> ${bashrc_file} && echo "updated ${bashrc_file} with JBOSS_HOME"
         fi
         if ! grep -q "alias jb=" ${bashrc_file}; then
             echo "alias jb='cd \${JBOSS_HOME}'" >> ${bashrc_file} && echo "updated ${bashrc_file} by adding the 'jb' alias"
@@ -91,7 +93,7 @@ function install-eap
     [ "${xmx}" = "" ] && { echo "'xmx' not defined" 1>&2; exit 1; }
     [ "${maxPermSize}" = "" ] && { echo "'maxPermSize' not defined" 1>&2; exit 1; }
 
-    local f=${eap_dir}/bin/standalone.conf
+    local f=${jboss_dir}/bin/standalone.conf
 
     if ! grep -q "^ *JAVA_OPTS=\".*\-Xms${xms}.*" ${f}; then
         cat ${f} | sed -e 's/^\( *JAVA_OPTS=\".*\)\(-Xms\).*\( -Xmx.*$\)/\1\2'${xms}'\3/' > ${burn_in_dir}/sed.tmp || \
@@ -142,17 +144,17 @@ function install-eap
     #
 
     local f
-    f=/opt/eap/standalone/configuration/mgmt-users.properties
+    f=/opt/${link_name}/standalone/configuration/mgmt-users.properties
 
     if ! grep -q "^admin=" ${f}; then
-        (cd /opt/eap/bin; ./add-user.sh -u admin -p admin123@) || { echo "failed to add the admin user" 1>&2; exit 1; }
+        (cd /opt/${link_name}/bin; ./add-user.sh -u admin -p admin123@) || { echo "failed to add the admin user" 1>&2; exit 1; }
     fi
 
     #
     # expose the HTTP console publicly
     #
 
-    f=${eap_dir}/standalone/configuration/standalone.xml
+    f=${jboss_dir}/standalone/configuration/standalone.xml
 
     if grep -q "^ *<socket-binding name=\"management-http\" interface=\"management\"" ${f}; then
         cat ${f} | sed -e 's/^\( *<socket-binding name=\"management-http\" interface=\"\)management\(\".*$\)/\1public\2/' > ${burn_in_dir}/sed.tmp || \
@@ -169,12 +171,12 @@ function install-eap
     #
 
     local actual_group
-    local d=/opt/eap/standalone
+    local d=/opt/${link_name}/standalone
 
     actual_group=$(get-group ${d}) || exit 1
 
-    if [ "${actual_group}" != "${eap_group}" ]; then
-        chgrp -R ${eap_group} ${d} && echo "chgrp -R ${eap_group} ${d}"
+    if [ "${actual_group}" != "${jboss_group}" ]; then
+        chgrp -R ${jboss_group} ${d} && echo "chgrp -R ${jboss_group} ${d}"
         chmod -R g+rw ${d}  && echo "chmod -R g+rw ${d}"
     fi
 
@@ -182,14 +184,14 @@ function install-eap
 
 # return the absolute path of the sole A-MQ directory, or empty string if no A-MQ directory
 # is found, or fail if more than one A-MQ directory is found
-function get-eap-dir
+function get-jboss-dir
 {
     local parent=$1
 
     [ "${parent}" = "" ] && { echo "'parent' directory not specified" 1>&2; exit 1; }
     [ -d ${parent} ] || { echo "'parent' ${parent} is not a directory" 1>&2; exit 1; }
 
-    echo "get-eap-dir() NOT YET IMPLEMENTED" 1>&2;
+    echo "get-jboss-dir() NOT YET IMPLEMENTED" 1>&2;
     exit 1
 
     local amq_dir

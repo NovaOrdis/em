@@ -182,7 +182,7 @@ function get-environment-configuration()
 #   substitution until the command reaches the remote host, user \${...}
 #
 # o may use ";" to specify multiple serial commands.
-#   Example: remote_command="export JAVA_HOME=/opt/java; /opt/eap/bin/add-user.sh"
+#   Example: remote_command="export JAVA_HOME=/opt/java; /opt/jboss/bin/add-user.sh"
 #
 #
 function execute-remotely() {

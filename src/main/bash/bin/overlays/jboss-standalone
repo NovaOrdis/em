@@ -1,0 +1,41 @@
+#!/bin/bash
+
+lib=$(dirname $0)/../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/ec2.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/overlays.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/jboss.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
+
+#
+# JBoss Standalone node overlay
+#
+
+#
+# dependencies
+#
+
+$(dirname $0)/java $@
+
+#
+# overlay
+#
+
+process-overlay-arguments $@
+overlay-preconditions
+
+install-binaries
+update-user-environment-for-jboss root
+update-user-environment-for-jboss ec2-user
+add-a-management-user admin admin123
+configure-public-interface $(get-primary-ip)
+configure-jboss-to-start-at-boot "standalone" ${JBOSS_TYPE}
+
+exit 0
+
+
+
+
+
+

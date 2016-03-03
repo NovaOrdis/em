@@ -15,7 +15,7 @@ function main
 
     [ "${amq_archive_file}" != "" -a ! -f ${archive_dir}/${amq_archive_file} ] && { echo "[error]: A-MQ archive file ${archive_dir}/${amq_archive_file} does not exist" 1>&2; exit 1; }
 
-    [ "${eap_archive_file}" != "" -a ! -f ${archive_dir}/${eap_archive_file} ] && { echo "[error]: EAP archive file ${archive_dir}/${eap_archive_file} does not exist" 1>&2; exit 1; }
+    [ "${jboss_archive_file}" != "" -a ! -f ${archive_dir}/${jboss_archive_file} ] && { echo "[error]: JBoss archive file ${archive_dir}/${jboss_archive_file} does not exist" 1>&2; exit 1; }
 
     # we will need to update the local /etc/hosts as part of this procedure,
     # verify that we have sufficient permissions

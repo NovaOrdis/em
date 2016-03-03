@@ -9,9 +9,9 @@ function main
         elif [ "$1" = "--amq" ]; then
             shift
             amq_archive_file=$1
-        elif [ "$1" = "--eap" ]; then
+        elif [ "$1" = "--jboss" ]; then
             shift
-            eap_archive_file=$1
+            jboss_archive_file=$1
         fi
         shift
     done
@@ -25,11 +25,11 @@ function main
 
     link-to-ec2-host ${id} /nfs/bin
 
-    if [ "${eap_archive_file}" != "" ]; then
-        # load the eap library
-        [ -f $(dirname $0)/eap.shlib ] && . $(dirname $0)/eap.shlib || \
-            { echo "we need to install EAP but we did not find the EAP library $(dirname $0)/eap.shlib " 1>&2; exit 1; }
+    if [ "${jboss_archive_file}" != "" ]; then
+        # load the jboss library
+        [ -f $(dirname $0)/jboss.shlib ] && . $(dirname $0)/jboss.shlib || \
+            { echo "we need to install JBoss but we did not find the JBoss library $(dirname $0)/jboss.shlib " 1>&2; exit 1; }
 
-        install-eap ${id} ${eap_archive_file}
+        install-jboss ${id} ${jboss_archive_file}
     fi
 }

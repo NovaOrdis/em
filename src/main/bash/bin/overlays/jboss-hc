@@ -5,18 +5,18 @@ lib=$(dirname $0)/../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} n
 lib=$(dirname $0)/../lib/ec2.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/overlays.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
-lib=$(dirname $0)/lib/eap.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/jboss.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 
 #
-# EAP Node overlay
+# JBoss Host Controller overlay
 #
 
 #
 # dependencies
 #
 
-$(dirname $0)/java $@
+$(dirname $0)/jboss-standalone $@
 
 #
 # overlay
@@ -25,16 +25,10 @@ $(dirname $0)/java $@
 process-overlay-arguments $@
 overlay-preconditions
 
-install-binaries
-update-user-environment-for-eap root
-update-user-environment-for-eap ec2-user
-add-a-management-user admin admin123
-configure-public-interface $(get-primary-ip)
-
 # TODO: replace modifying xml with external property (jboss.host.name)
 configure-host.xml-host-name $(hostname)
 
-if [ -z "${WE_ARE_EAP_DOMAIN_CONTROLLER}" ]; then
+if [ -z "${WE_ARE_DOMAIN_CONTROLLER}" ]; then
 
     #
     # we are subordinate host controller
@@ -59,12 +53,6 @@ else
     update-server-list-in-host-xml
 fi
 
-configure-eap-to-start-at-boot
+configure-jboss-to-start-at-boot "domain"
 
 exit 0
-
-
-
-
-
-

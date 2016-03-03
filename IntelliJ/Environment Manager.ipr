@@ -223,6 +223,7 @@
         <w>systemd</w>
         <w>touple</w>
         <w>touples</w>
+        <w>wildfly</w>
       </words>
     </dictionary>
   </component>

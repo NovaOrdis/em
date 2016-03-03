@@ -432,6 +432,8 @@ function get-top-level-dir-in-zip-archive
     local result
     result=$(unzip -l ${zip_file} | grep -v Archive | grep -v Length | grep -v "\-\-\-" | head -1 | awk '{print $4}') || fail "failed to read directory name from zip file ${zip_file}"
     [ -z "${result}" ] && fail "read empty top directory name from zip file ${zip_file}"
+
+    debug "top level dir in ${zip_file}: ${result}"
     echo ${result}
 
 #

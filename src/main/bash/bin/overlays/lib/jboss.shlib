@@ -1,7 +1,10 @@
 #!/bin/bash
 
 #
-# Successful installation exports a valid JBOSS_HOME in the environment.
+# Successful installation exports the following in the environment:
+#
+#   1. a valid JBOSS_HOME
+#   2. a JBOSS_TYPE that is either "eap" or "wildfly"
 #
 # return 0 if the installation modified state or 1 if not
 #
@@ -13,48 +16,59 @@ function install-binaries() {
     repository=$(get-environment-configuration "repository") || exit 1
     [ -d ${repository} ] || fail "repository directory ${repository} not accessible"
 
-    local eap_template_name
-    eap_template_name=$(get-environment-configuration "eap_template") || exit 1
+    local jboss_template_name
+    jboss_template_name=$(get-environment-configuration "jboss_template") || exit 1
 
-    local eap_template_file=${repository}/${eap_template_name}
-    [ -f ${eap_template_file} ] || fail "EAP template file ${eap_template_file} not found"
+    local jboss_template_file=${repository}/${jboss_template_name}
+    [ -f ${jboss_template_file} ] || fail "JBoss template file ${jboss_template_file} not found"
+
+    if [[ "${jboss_template_file}" =~ wildfly ]]; then
+        export JBOSS_TYPE=wildfly
+    elif [[ "${jboss_template_file}" =~ eap ]]; then
+        export JBOSS_TYPE=eap
+    else
+        fail "could not determine JBOSS_TYPE from ${jboss_template_file}"
+    fi
+    debug "exported JBOSS_TYPE=${JBOSS_TYPE}"
 
     local top_level_dir_in_archive
-    top_level_dir_in_archive=$(get-top-level-dir-in-zip-archive ${eap_template_file}) || \
-        fail "failed to get the top level dir from archive ${eap_template_file}"
+    top_level_dir_in_archive=$(get-top-level-dir-in-zip-archive ${jboss_template_file}) || \
+        fail "failed to get the top level dir from archive ${jboss_template_file}"
+
+    local link_name=jboss
 
     if [ -d /opt/${top_level_dir_in_archive} ]; then
-        debug "EAP already installed (/opt/${top_level_dir_in_archive})"
-        [ ! -h /opt/eap ] && fail "EAP already installed as /opt/${top_level_dir_in_archive} but /opt/eap link not created"
-        export JBOSS_HOME=/opt/eap
+        debug "JBoss already installed (/opt/${top_level_dir_in_archive})"
+        [ ! -h /opt/${link_name} ] && fail "JBoss already installed as /opt/${top_level_dir_in_archive} but /opt/${link_name} link not created"
+        export JBOSS_HOME=/opt/${link_name}
         return 1;
     fi
 
-    info "installing EAP ..."
+    info "installing JBoss ..."
 
     local unzip_quiet="-q"
     ${verbose} && unzip_quiet=""
 
-    info "extracting ${eap_template_file} into /opt ..."
-    (cd /opt; unzip ${unzip_quiet} ${eap_template_file}) && \
-        info "extracted ${eap_template_file} into /opt" || \
-        fail "failed to extract ${eap_template_file} into /opt"
+    info "extracting ${jboss_template_file} into /opt ..."
+    (cd /opt; unzip ${unzip_quiet} ${jboss_template_file}) && \
+        info "extracted ${jboss_template_file} into /opt" || \
+        fail "failed to extract ${jboss_template_file} into /opt"
 
     top_level_dir_in_archive="/opt/${top_level_dir_in_archive}"
     debug "dir_name: ${top_level_dir_in_archive}"
     [ -d ${top_level_dir_in_archive} ] || fail "${top_level_dir_in_archive} not a directory"
 
-    (cd /opt; ln -s $(basename ${top_level_dir_in_archive}) eap) && \
-        info "linked $(basename ${top_level_dir_in_archive}) to /opt/eap" || \
-        fail "failed to link $(basename ${top_level_dir_in_archive}) to /opt/eap"
+    (cd /opt; ln -s $(basename ${top_level_dir_in_archive}) ${link_name}) && \
+        info "linked $(basename ${top_level_dir_in_archive}) to /opt/${link_name}" || \
+        fail "failed to link $(basename ${top_level_dir_in_archive}) to /opt/${link_name}"
 
-    export JBOSS_HOME=/opt/eap
+    export JBOSS_HOME=/opt/${link_name}
     debug "exported JBOSS_HOME=${JBOSS_HOME}"
     return 0
 }
 
 # return 0 if the function changed state or 1 if not
-function update-user-environment-for-eap()
+function update-user-environment-for-jboss()
 {
     debug-arguments $@
 
@@ -144,6 +158,9 @@ function add-a-management-user()
     ${state_changed} && return 0 || return 1
 }
 
+#
+# Writes the actual IP address of the primary interface in both standalone.conf and domain.conf file.
+#
 # return 0 if the function changed state or 1 if not
 function configure-public-interface()
 {
@@ -154,18 +171,25 @@ function configure-public-interface()
     [ -z "${ip}" ] && fail "${FUNCNAME[0]}: 'ip' not provided"
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
 
-    #
-    # this code configures a host controller, if we need to configure a standalone node, we must refactor
-    #
+    local configuration_files="standalone.conf domain.conf"
 
-    local domain_conf_file=${JBOSS_HOME}/bin/domain.conf
-    [ -f ${domain_conf_file} ] || fail "${domain_conf_file} does not exist"
+    for cf in ${configuration_files}; do
+        local cf_path=${JBOSS_HOME}/bin/${cf}
+        if [ ! -f ${cf_path} ]; then
+            info "${cf_path} does not exist, no configuration will be written in it"
+        else
+            local environment_variable_name=JAVA_OPTS
+            [ "${cf}" = "domain.conf" ] && environment_variable_name=HOST_CONTROLLER_JAVA_OPTS
 
-    if ! grep -q "^HOST_CONTROLLER_JAVA_OPTS=.*Djboss\.bind\.address=" ${domain_conf_file}; then
-        echo "" >> ${domain_conf_file}
-        echo "HOST_CONTROLLER_JAVA_OPTS=\"\${HOST_CONTROLLER_JAVA_OPTS} -Djboss.bind.address=${ip}\"" >> ${domain_conf_file}
-        info "configured public interface to bind to ${ip}"
-    fi
+            if ! grep -q "^"${environment_variable_name}"=.*Djboss\.bind\.address=" ${cf_path}; then
+                echo "" >> ${cf_path}
+                echo "${environment_variable_name}=\"\${${environment_variable_name} -Djboss.bind.address=${ip}\"" >> ${cf_path}
+                info "configured public interface to bind to ${ip} in ${cf_path}"
+            else
+                info "${cf_path} already configured with public interface ${ip}"
+            fi
+        fi
+    done
 }
 
 # return 0 if the function changed state or 1 if not
@@ -195,6 +219,8 @@ function configure-management-interface()
     return 1
 }
 
+#
+# Write the actual host name into the <host> root element
 #
 # TODO: replace modifying xml with external property (jboss.host.name)
 #
@@ -321,7 +347,7 @@ function establish-subordinate-host-controller-identity-on-domain-controller() {
     local password="${host_controller_name}_123"
 
     #
-    # Unsafe assumption: we assume EAP is installed in the same location on the domain controller so
+    # Unsafe assumption: we assume JBoss is installed in the same location on the domain controller so
     # we use the same JBOSS_HOME. This is most likely true, as we strive for homogeneous environments
     # but it may not be. If that is the case, we need to invoke remotely into the domain controller's
     # management interface using the local CLI and get the installation directory
@@ -386,66 +412,48 @@ function compute-server-identity-secret-value() {
     echo -n "${password}" | openssl enc -base64
 }
 
-function configure-eap-to-start-at-boot() {
+#
+# Creates the underlying wiring required by the systemd startup mechanism. The startup scripts are
+# named suggestively jboss-standalone or jboss-host-controller, depending on the mode JBoss is intended
+# to start it (first argument "standalone" or "domain")
+#
+function configure-jboss-to-start-at-boot() {
 
     debug-arguments $@
+
+    local mode=$1 # must be either "standalone" or "domain"
+    local type=$2 # must be either "wildfly" or "eap"
+    [ "${mode}" = "standalone" -o "${mode}" = "domain" ] || \
+        fail "'mode' must be either \"standalone\" or \"domain\" but it is \"${mode}\""
+    [ "${type}" = "wildfly" -o "${type}" = "eap" ] || \
+        fail "'type' must be either \"wildfly\" or \"eap\" but it is \"${type}\""
 
     [ -z ${JAVA_HOME} ] && fail "previous steps failed to export JAVA_HOME"
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
 
+    local script_file
     local script_dir=/usr/lib/systemd/scripts
-    local script_file=/usr/lib/systemd/scripts/jboss-host-controller
+    [ "${mode}" = "standalone" ] && \
+        script_file=${script_dir}/jboss-standalone || \
+        script_file=${script_dir}/jboss-host-controller
 
     #
-    # copy the System V init script in the systemd script directory if it is not already there
+    # create the System V init script in the systemd script directory if it is not already there
     #
 
     if [ ! -f ${script_file} ]; then
-        cp ${JBOSS_HOME}/bin/init.d/jboss-as-domain.sh ${script_file} && \
-            debug "copied ${JBOSS_HOME}/bin/init.d/jboss-as-domain.sh as ${script_file}" || \
-            fail "failed to copy ${JBOSS_HOME}/bin/init.d/jboss-as-domain.sh as ${script_file}"
-    fi
 
-    #
-    # customize the startup script
-    #
-    if ! grep -q "^JBOSS_HOME=${JBOSS_HOME}" ${script_file}; then
-        local tmp=$(unique-file)
-        (cat << EOF
-#!/bin/bash
-#
-# JBoss EAP ExecStart=/ExecStop= script
-#
-
-JBOSS_HOME=${JBOSS_HOME}
-JBOSS_USER=root
-#
-# The amount of time to wait for startup
-#
-STARTUP_WAIT=30
-#
-# The amount of time to wait for shutdown
-#
-SHUTDOWN_WAIT=30
-#
-# Location to keep the console log
-#
-JBOSS_CONSOLE_LOG=\${JBOSS_HOME}/domain/log/console.log
-[ ! -d \${JBOSS_HOME}/domain/log ] && { mkdir -p \${JBOSS_HOME}/domain/log; chown \${JBOSS_USER} \${JBOSS_HOME}/domain/log; chmod a+rx \${JBOSS_HOME}/domain/log; }
-
-EOF
-) > ${tmp}
-    local tmp2=$(unique-file)
-    cat ${tmp} ${script_file} >> ${tmp2}
-    rm ${tmp}
-    mv ${tmp2} ${script_file} && \
-        info "customized systemd ExecStart= script ${script_file}" || \
-        fail "failed to customize systemd ExecStart= script ${script_file}"
+        local init_script_content
+        init_script_content=$(get-customized-source-init-script-content "${mode}" "${type}") || exit 1
+        echo "${init_script_content}" > ${script_file} && \
+            info "wrote customized systemd ExecStart= script ${script_file}" || \
+            fail "failed to write customized systemd ExecStart= script ${script_file}"
     fi
 
     #
     # set permissions
     #
+
     chmod a+rx ${script_file} && \
         debug "set a+rx on ${script_file}" || \
         fail "failed to chmod a+rx ${script_file}"
@@ -454,14 +462,18 @@ EOF
     # create the unit file
     #
 
-    local unit_file=/usr/lib/systemd/system/$(basename ${script_file}).service
+    local unit_file_name
+    unit_file_name=$(basename ${script_file}) || exit 1
+    unit_file_name="${unit_file_name}.service"
+
+    local unit_file=/usr/lib/systemd/system/${unit_file_name}
 
     if [ -f ${unit_file} ]; then
         info "systemd unit file ${unit_file} already exists"
     else
         (cat << EOF
 [Unit]
-Description=EAP Host Controller Service
+Description=JBoss Service
 After=network.target
 
 [Service]
@@ -484,9 +496,73 @@ EOF
             fail "failed to restart systemd"
 
         systemctl enable $(basename ${unit_file}) && \
-            info "configured $(basename ${script_file}).service to start at boot" || \
-            fail "fail to configure $(basename ${script_file}).service to start at boot"
+            info "configured ${unit_file_name} to start at boot" || \
+            fail "fail to configure ${unit_file_name} to start at boot"
     fi
+}
+
+#
+# returns at stdout the content of the customized init script to used for startup. It is usually based on
+# the appropriate ${JBOSS_HOME}/bin/init.d script, depending on mode and type (wildfly, eap, etc).
+#
+function get-customized-source-init-script-content() {
+
+    debug-arguments $@
+
+    local mode=$1 # must be either "standalone" or "domain"
+    local type=$2 # must be either "wildfly" or "eap"
+    [ "${mode}" = "standalone" -o "${mode}" = "domain" ] || \
+        fail "'mode' must be either \"standalone\" or \"domain\" but it is \"${mode}\""
+    [ "${type}" = "wildfly" -o "${type}" = "eap" ] || \
+        fail "'type' must be either \"wildfly\" or \"eap\" but it is \"${type}\""
+
+    local source_file
+
+    if [ "${type}" = "eap" ]; then
+        if [ "${mode}" = "domain" ]; then
+            source_file=${JBOSS_HOME}/bin/init.d/jboss-as-domain.sh
+        elif [ "${mode}" = "standalone" ]; then
+            fail "support for ${type}/${mode} NOT YET IMPLEMENTED"
+        else
+            fail "invalid mode '${mode}'"
+        fi
+    elif [ "${type}" = "wildfly" ]; then
+        if [ "${mode}" = "domain" ]; then
+            fail "support for ${type}/${mode} NOT YET IMPLEMENTED"
+        elif [ "${mode}" = "standalone" ]; then
+            source_file=${JBOSS_HOME}/bin/init.d/wildfly-init-redhat.sh
+        else
+            fail "invalid mode '${mode}'"
+        fi
+    else
+        fail "invalid type '${type}'"
+    fi
+
+    cat << EOF
+#!/bin/bash
+#
+# JBoss ExecStart=/ExecStop= script
+#
+
+JBOSS_HOME=${JBOSS_HOME}
+JBOSS_USER=root
+#
+# The amount of time to wait for startup
+#
+STARTUP_WAIT=30
+#
+# The amount of time to wait for shutdown
+#
+SHUTDOWN_WAIT=30
+#
+# Location to keep the console log
+#
+JBOSS_CONSOLE_LOG=\${JBOSS_HOME}/${mode}/log/console.log
+[ ! -d \${JBOSS_HOME}/${mode}/log ] && { mkdir -p \${JBOSS_HOME}/${mode}/log; chown \${JBOSS_USER} \${JBOSS_HOME}/${mode}/log; chmod a+rx \${JBOSS_HOME}/${mode}/log; }
+
+EOF
+
+    cat ${source_file} | grep -v "^#\!\/"
 }
 
 #
