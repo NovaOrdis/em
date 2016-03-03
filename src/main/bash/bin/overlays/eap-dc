@@ -23,12 +23,12 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 #
 
 #
-# set WE_ARE_DOMAIN_CONTROLLER because some methods in the dependent eap-node overlay need
+# set WE_ARE_DOMAIN_CONTROLLER because some methods in the dependent eap-hc overlay need
 # to know that
 #
 
 export WE_ARE_EAP_DOMAIN_CONTROLLER=true
-$(dirname $0)/eap-node $@
+$(dirname $0)/eap-hc $@
 
 #
 # overlay
