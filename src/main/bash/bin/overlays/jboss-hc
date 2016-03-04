@@ -13,6 +13,14 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 #
 
 #
+# to let the runtime know we're building a subordinate host controller, set SUBORDINATE_HOST_CONTROLLER=true (unless
+# we're building a domain controller); some methods in the dependent jboss-standalone overlays need to know that.
+#
+
+[ -z "${DOMAIN_CONTROLLER}" ] && export SUBORDINATE_HOST_CONTROLLER=true
+
+
+#
 # dependencies
 #
 
@@ -28,7 +36,7 @@ overlay-preconditions
 # TODO: replace modifying xml with external property (jboss.host.name)
 configure-host.xml-host-name $(hostname)
 
-if [ -z "${WE_ARE_DOMAIN_CONTROLLER}" ]; then
+if [ -n "${SUBORDINATE_HOST_CONTROLLER}" ]; then
 
     #
     # we are subordinate host controller
@@ -36,6 +44,7 @@ if [ -z "${WE_ARE_DOMAIN_CONTROLLER}" ]; then
 
     domain_controller_name=$(extract-from-overlay-args "domain-controller" ${args}) || exit 1
     domain_controller_ip_address=$(get-internal-ip-for-name ${domain_controller_name}) || exit 1
+    [ -z "${domain_controller_ip_address}" ] && fail "there is no such host: '${domain_controller_name}'"
     configure-master-domain-controller-locally ${domain_controller_ip_address} ${domain_controller_name}
 
     establish-subordinate-host-controller-identity-on-domain-controller \
@@ -53,6 +62,6 @@ else
     update-server-list-in-host-xml
 fi
 
-configure-jboss-to-start-at-boot "domain"
+configure-jboss-to-start-at-boot "domain" $(get-jboss-type $(get-environment-configuration "jboss_template"))
 
 exit 0

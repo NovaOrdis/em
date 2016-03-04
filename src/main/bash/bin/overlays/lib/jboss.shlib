@@ -22,13 +22,9 @@ function install-binaries() {
     local jboss_template_file=${repository}/${jboss_template_name}
     [ -f ${jboss_template_file} ] || fail "JBoss template file ${jboss_template_file} not found"
 
-    if [[ "${jboss_template_file}" =~ wildfly ]]; then
-        export JBOSS_TYPE=wildfly
-    elif [[ "${jboss_template_file}" =~ eap ]]; then
-        export JBOSS_TYPE=eap
-    else
-        fail "could not determine JBOSS_TYPE from ${jboss_template_file}"
-    fi
+    debug "jboss template file: ${jboss_template_file}"
+
+    export JBOSS_TYPE=$(get-jboss-type "${jboss_template_file}")
     debug "exported JBOSS_TYPE=${JBOSS_TYPE}"
 
     local top_level_dir_in_archive
@@ -67,13 +63,35 @@ function install-binaries() {
     return 0
 }
 
+#
+# sends "wildfly" or "eap" to stdout
+#
+function get-jboss-type() {
+
+    debug-arguments $@
+
+    local jboss_template_file_name=$1
+    [ -z "${jboss_template_file_name}" ] && fail "'jboss_template_file_name' not provided"
+
+    if [[ "${jboss_template_file_name}" =~ wildfly ]]; then
+        echo "wildfly"
+    elif [[ "${jboss_template_file_name}" =~ eap ]]; then
+        echo "eap"
+    else
+        fail "could not determine jboss type from ${jboss_template_file_name}"
+    fi
+}
+
 # return 0 if the function changed state or 1 if not
 function update-user-environment-for-jboss()
 {
     debug-arguments $@
 
     local user=$1
-    [ "${user}" = "" ] && fail "${FUNCNAME[0]}: 'name' not provided"
+    local mode=$2
+    [ -z "${user}" ] && fail "${FUNCNAME[0]}: 'name' not provided"
+    [ -z "${mode}" ] && fail "${FUNCNAME[0]}: 'mode' not provided"
+
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
     [ -d ${JBOSS_HOME} ] || fail "${JBOSS_HOME} does not exist"
 
@@ -102,13 +120,13 @@ function update-user-environment-for-jboss()
     fi
 
     if ! grep -q "^alias jbc=" ${bashrc_file}; then
-        echo "alias jbc='cd \${JBOSS_HOME}/domain/configuration'" >> ${bashrc_file}
+        echo "alias jbc='cd \${JBOSS_HOME}/${mode}/configuration'" >> ${bashrc_file}
         info "'jbc' alias created for user ${user}"
         state_changed=true
     fi
 
     if ! grep -q "^alias jbl=" ${bashrc_file}; then
-        echo "alias jbl='cd \${JBOSS_HOME}/domain/log'" >> ${bashrc_file}
+        echo "alias jbl='cd \${JBOSS_HOME}/${mode}/log'" >> ${bashrc_file}
         info "'jbc' alias created for user ${user}"
         state_changed=true
     fi
@@ -164,9 +182,10 @@ function add-a-management-user()
 # return 0 if the function changed state or 1 if not
 function configure-public-interface()
 {
-    local ip=$1
-
     debug-arguments $@
+
+    local ip=$1
+    local modified=false
 
     [ -z "${ip}" ] && fail "${FUNCNAME[0]}: 'ip' not provided"
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
@@ -183,40 +202,55 @@ function configure-public-interface()
 
             if ! grep -q "^"${environment_variable_name}"=.*Djboss\.bind\.address=" ${cf_path}; then
                 echo "" >> ${cf_path}
-                echo "${environment_variable_name}=\"\${${environment_variable_name} -Djboss.bind.address=${ip}\"" >> ${cf_path}
+                echo "${environment_variable_name}=\"\${"${environment_variable_name}"} -Djboss.bind.address=${ip}\"" >> ${cf_path}
                 info "configured public interface to bind to ${ip} in ${cf_path}"
+                modified=true
             else
                 info "${cf_path} already configured with public interface ${ip}"
             fi
         fi
     done
+
+    ${modified} && return 0 || return 1
 }
 
+#
+# Writes the actual IP address of the management interface in both standalone.conf and domain.conf file.
+#
 # return 0 if the function changed state or 1 if not
 function configure-management-interface()
 {
     debug-arguments $@
 
     local ip=$1
+    local modified=false
 
     [ -z "${ip}" ] && fail "${FUNCNAME[0]}: 'ip' not provided"
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
 
-    #
-    # this code configures a host controller, if we need to configure a standalone node, we must refactor
-    #
+    local configuration_files="standalone.conf domain.conf"
 
-    local domain_conf_file=${JBOSS_HOME}/bin/domain.conf
-    [ -f ${domain_conf_file} ] || fail "${domain_conf_file} does not exist"
+    for cf in ${configuration_files}; do
+        local cf_path=${JBOSS_HOME}/bin/${cf}
+        if [ ! -f ${cf_path} ]; then
+            info "${cf_path} does not exist, no configuration will be written in it"
+        else
 
-    if ! grep -q "^HOST_CONTROLLER_JAVA_OPTS=.*Djboss\.bind\.address\.management=" ${domain_conf_file}; then
-        echo "" >> ${domain_conf_file}
-        echo "HOST_CONTROLLER_JAVA_OPTS=\"\${HOST_CONTROLLER_JAVA_OPTS} -Djboss.bind.address.management=${ip}\"" >> ${domain_conf_file}
-        info "configured management interface to bind to ${ip}"
-        return 0
-    fi
+            local environment_variable_name=JAVA_OPTS
+            [ "${cf}" = "domain.conf" ] && environment_variable_name=HOST_CONTROLLER_JAVA_OPTS
 
-    return 1
+            if ! grep -q "^"${environment_variable_name}"=.*Djboss\.bind\.address\.management=" ${cf_path}; then
+                echo "" >> ${cf_path}
+                echo "${environment_variable_name}=\"\${"${environment_variable_name}"} -Djboss.bind.address.management=${ip}\"" >> ${cf_path}
+                info "configured management interface to bind to ${ip} in ${cf_path}"
+                modified=true
+            else
+                info "${cf_path} already configured with management interface ${ip}"
+            fi
+        fi
+    done
+
+    ${modified} && return 0 || return 1
 }
 
 #

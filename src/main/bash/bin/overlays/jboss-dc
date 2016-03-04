@@ -19,15 +19,15 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 #java_min_mem=12g # ex: 1g or 515m
 
 #
+# to let the runtime know we're building a domain controller, set DOMAIN_CONTROLLER=true; some methods in the
+# dependent jboss-hc/jboss-standalone overlays need to know that.
+#
+export DOMAIN_CONTROLLER=true
+
+#
 # dependencies
 #
 
-#
-# set WE_ARE_DOMAIN_CONTROLLER because some methods in the dependent jboss-hc overlay need
-# to know that
-#
-
-export WE_ARE_DOMAIN_CONTROLLER=true
 $(dirname $0)/jboss-hc $@
 
 #

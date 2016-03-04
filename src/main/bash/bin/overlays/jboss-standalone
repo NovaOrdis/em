@@ -22,15 +22,18 @@ $(dirname $0)/java $@
 # overlay
 #
 
+[ -z "${SUBORDINATE_HOST_CONTROLLER}" -a -z "${DOMAIN_CONTROLLER}" ] && mode="standalone" || mode="domain"
+
 process-overlay-arguments $@
 overlay-preconditions
 
 install-binaries
-update-user-environment-for-jboss root
-update-user-environment-for-jboss ec2-user
+update-user-environment-for-jboss root ${mode}
+update-user-environment-for-jboss ec2-user ${mode}
 add-a-management-user admin admin123
 configure-public-interface $(get-primary-ip)
-configure-jboss-to-start-at-boot "standalone" ${JBOSS_TYPE}
+
+[ ${mode} = "standalone" ] && configure-jboss-to-start-at-boot "standalone" ${JBOSS_TYPE}
 
 exit 0
 
