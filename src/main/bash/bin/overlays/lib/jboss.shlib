@@ -457,10 +457,10 @@ function configure-jboss-to-start-at-boot() {
 
     local mode=$1 # must be either "standalone" or "domain"
     local type=$2 # must be either "wildfly" or "eap"
-    [ "${mode}" = "standalone" -o "${mode}" = "domain" ] || \
-        fail "'mode' must be either \"standalone\" or \"domain\" but it is \"${mode}\""
-    [ "${type}" = "wildfly" -o "${type}" = "eap" ] || \
-        fail "'type' must be either \"wildfly\" or \"eap\" but it is \"${type}\""
+    local profile=$3 # it only makes sense for standalone, for domain profiles are associated with server groups
+                     # in configuration; for standalone, it can be "" (meaning default), "ha", "full" and "full-ha"
+    [ "${mode}" = "standalone" -o "${mode}" = "domain" ] || fail "'mode' must be either \"standalone\" or \"domain\" but it is \"${mode}\""
+    [ "${type}" = "wildfly" -o "${type}" = "eap" ] || fail "'type' must be either \"wildfly\" or \"eap\" but it is \"${type}\""
 
     [ -z ${JAVA_HOME} ] && fail "previous steps failed to export JAVA_HOME"
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
@@ -478,7 +478,7 @@ function configure-jboss-to-start-at-boot() {
     if [ ! -f ${script_file} ]; then
 
         local init_script_content
-        init_script_content=$(get-customized-source-init-script-content "${mode}" "${type}") || exit 1
+        init_script_content=$(get-customized-source-init-script-content "${type}" "${mode}" "${profile}") || exit 1
         echo "${init_script_content}" > ${script_file} && \
             info "wrote customized systemd ExecStart= script ${script_file}" || \
             fail "failed to write customized systemd ExecStart= script ${script_file}"
@@ -488,9 +488,7 @@ function configure-jboss-to-start-at-boot() {
     # set permissions
     #
 
-    chmod a+rx ${script_file} && \
-        debug "set a+rx on ${script_file}" || \
-        fail "failed to chmod a+rx ${script_file}"
+    chmod a+rx ${script_file} && debug "set a+rx on ${script_file}" || fail "failed to chmod a+rx ${script_file}"
 
     #
     # create the unit file
@@ -543,12 +541,17 @@ function get-customized-source-init-script-content() {
 
     debug-arguments $@
 
-    local mode=$1 # must be either "standalone" or "domain"
-    local type=$2 # must be either "wildfly" or "eap"
+    local type=$1 # must be either "wildfly" or "eap"
+    local mode=$2 # must be either "standalone" or "domain"
+    local profile=$3 # it only makes sense for standalone, for domain profiles are associated with server groups
+                     # in configuration; for standalone, it can be "" (meaning default), "ha", "full" and "full-ha"
+
     [ "${mode}" = "standalone" -o "${mode}" = "domain" ] || \
         fail "'mode' must be either \"standalone\" or \"domain\" but it is \"${mode}\""
     [ "${type}" = "wildfly" -o "${type}" = "eap" ] || \
         fail "'type' must be either \"wildfly\" or \"eap\" but it is \"${type}\""
+    [ "${profile}" = "" -o "${profile}" = "ha" -o "${profile}" = "full" -o "${profile}" = "full-ha" ] || \
+        fail "'profile' must be one of \"\", \"ha\", \"full\" or \"full-ha\" but it is \"${profile}\""
 
     local source_file
 
@@ -572,6 +575,17 @@ function get-customized-source-init-script-content() {
         fail "invalid type '${type}'"
     fi
 
+    #
+    # assemble the "profile line". It only makes sense in standalone mode, in domain mode it can be empty
+    # as the profiles are associated with server groups in configuration
+    #
+    local profile_line=""
+    if [ "${mode}" = "standalone" ]; then
+        profile_line="JBOSS_CONFIG=standalone"
+        [ "${profile}" != "" ] && profile_line="${profile_line}-${profile}"
+        profile_line="${profile_line}.xml"
+    fi
+
     cat << EOF
 #!/bin/bash
 #
@@ -580,6 +594,8 @@ function get-customized-source-init-script-content() {
 
 JBOSS_HOME=${JBOSS_HOME}
 JBOSS_USER=root
+${profile_line}
+
 #
 # The amount of time to wait for startup
 #

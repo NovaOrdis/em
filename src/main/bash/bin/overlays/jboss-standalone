@@ -33,7 +33,10 @@ update-user-environment-for-jboss ec2-user ${mode}
 add-a-management-user admin admin123
 configure-public-interface $(get-primary-ip)
 
-[ ${mode} = "standalone" ] && configure-jboss-to-start-at-boot "standalone" ${JBOSS_TYPE}
+if [ ${mode} = "standalone" ]; then
+    profile=$(extract-from-overlay-args "profile" ${args}) || exit 1
+    configure-jboss-to-start-at-boot "standalone" ${JBOSS_TYPE} ${profile}
+fi
 
 exit 0
 
