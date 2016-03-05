@@ -36,6 +36,7 @@ configure-public-interface $(get-primary-ip)
 if [ ${mode} = "standalone" ]; then
     profile=$(extract-from-overlay-args "profile" ${args}) || exit 1
     configure-jboss-to-start-at-boot "standalone" ${JBOSS_TYPE} ${profile}
+    archive-irrelevant-standalone-files ${profile}
 fi
 
 exit 0

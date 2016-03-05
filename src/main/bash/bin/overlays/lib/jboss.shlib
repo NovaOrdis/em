@@ -567,7 +567,19 @@ function get-customized-source-init-script-content() {
         if [ "${mode}" = "domain" ]; then
             fail "support for ${type}/${mode} NOT YET IMPLEMENTED"
         elif [ "${mode}" = "standalone" ]; then
+
             source_file=${JBOSS_HOME}/bin/init.d/wildfly-init-redhat.sh
+
+            if [ ! -f ${source_file} ]; then
+                #
+                # try in other places
+                #
+
+                # WildFly 10.0.0
+                source_file=${JBOSS_HOME}/docs/contrib/scripts/init.d/wildfly-init-redhat.sh
+            fi
+
+            [ ! -f ${source_file} ] && fail "no init file found for ${mode} ${type}"
         else
             fail "invalid mode '${mode}'"
         fi
@@ -615,24 +627,23 @@ EOF
     cat ${source_file} | grep -v "^#\!\/"
 }
 
+########################################################################################################################
+# CLI utilities
+########################################################################################################################
+
 #
 # Connects locally or remotely and executes the given command. It needs the target instance to be up and running.
-#
-# arg1 - the command
-# arg2 - the host:port if not local invocation (empty if local invocation)
-# arg3 - username (empty if local invocation)
-# arg4 - password (empty if local invocation)
 #
 function jboss-cli() {
 
     debug-arguments $@
 
-    local command=$1
+    local command=$1 # the command
     [ -z "${command}" ] && fail "'command' not provided"
 
-    local host_and_port=$2
-    local username=$3
-    local password=$4
+    local host_and_port=$2 # the host:port if not local invocation (empty if local invocation)
+    local username=$3 # username (empty if local invocation)
+    local password=$4 # password (empty if local invocation)
 
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
 
@@ -656,6 +667,68 @@ EOF
         fail "failed to execute JBoss CLI ${connect_args} command: ${output}"
    fi
 }
+
+#
+# Returns the attribute value at stdout
+# If the attribute is undefined, returns empty string at stdout
+# If the call is unsuccessful, the function call fails
+#
+function read-attribute() {
+
+    debug-arguments $@
+
+    local path=$1 # the resource path
+    local attribute_name=$2 # the attribute name
+    local host_and_port=$3 # the host:port if not local invocation (empty if local invocation)
+    local username=$4 # username (empty if local invocation)
+    local password=$5 # password (empty if local invocation)
+
+    [ -z "${path}" ] && fail "'path' not provided"
+    [ -z "${attribute_name}" ] && fail "'attribute_name' not provided"
+
+    local value
+    value=$(jboss-cli "${path}:read-attribute(name=${attribute_name})") || exit 1
+
+    if ! echo "${value}" | grep -q "\"outcome\" *=> * \"success\""; then
+        fail "read-attribute failed"
+    fi
+
+    debug "read-attribute invocation successful"
+    value=$(echo "${value}" | sed -e 's/.*\"result\" *=> *\"\(.*\)\" }.*$/\1/')
+    debug "value: ${value}"
+
+    if [ "${value}" = "undefined" ]; then
+        echo ""
+    else
+        echo "${value}"
+    fi
+}
+
+#
+# Writes the attribute value
+#
+function write-attribute() {
+
+    debug-arguments $@
+
+    local path=$1 # the resource path
+    local attribute_name=$2 # the attribute name
+    local attribute_value=$3 # the attribute value
+    local host_and_port=$4 # the host:port if not local invocation (empty if local invocation)
+    local username=$5 # username (empty if local invocation)
+    local password=$6 # password (empty if local invocation)
+
+    [ -z "${path}" ] && fail "'path' not provided"
+    [ -z "${attribute_name}" ] && fail "'attribute_name' not provided"
+    [ -z "${attribute_value}" ] && fail "'attribute_value' not provided"
+
+    jboss-cli "${path}:write-attribute(name=\"${attribute_name}\",value=\"${attribute_value}\")"
+}
+
+########################################################################################################################
+# END of CLI utilities
+########################################################################################################################
+
 
 ########################################################################################################################
 # Logic that modifies XML lists based on external (command-line) specifications. Used to modify:
@@ -1139,3 +1212,111 @@ function configure-server-groups() {
 
     done
 }
+
+#
+# because there is no easy way to tell what profile a standalone JBoss instance is using, we only leave
+# the relevant configuration file in place and we stash away everything else in the "archive" subdirectory
+#
+function archive-irrelevant-standalone-files() {
+
+    debug-arguments $@
+
+    local profile=$1
+
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    local configuration_dir=${JBOSS_HOME}/standalone/configuration
+    [ -d ${configuration_dir} ] || fail "directory ${configuration_dir} does not exist"
+
+    local archive_dir=${configuration_dir}/archive
+
+    if [ ! -d ${archive_dir} ]; then
+        mkdir ${archive_dir} && info "created ${archive_dir}" || fail "failed to create ${archive_dir}"
+    fi
+
+    local configuration_file_name="standalone"
+    [ -n "${profile}" ] && configuration_file_name="${configuration_file_name}-${profile}"
+    configuration_file_name="${configuration_file_name}.xml"
+
+    debug "configuration file name: ${configuration_file_name}"
+
+    for i in ${configuration_dir}/standalone*; do
+
+        local bi=$(basename ${i})
+        debug "file name: ${bi}"
+        if [ "${bi}" != "${configuration_file_name}" ]; then
+            mv ${i} ${archive_dir} && info "archived ${bi}" || fail "failed to move ${i} to ${archive_dir}"
+        fi
+    done
+}
+
+########################################################################################################################
+# jboss-configuration overlay functions
+########################################################################################################################
+
+function jgroups-configuration() {
+
+    debug-arguments $@
+
+    local default_stack
+    local initial_hosts
+
+    while [ -n "$1" ]; do
+        if [[ $1 =~ --default-stack ]]; then
+            default_stack=${1:16}
+        elif [[ $1 =~ --initial-hosts ]]; then
+            initial_hosts=${1:16}
+        fi
+        shift
+    done
+
+    [ -z "${default_stack}" ] && fail "no --default-stack specified"
+
+    #
+    # configure the default stack if not already set
+    #
+
+    local current_default_stack_name
+    current_default_stack_name=$(read-attribute "/subsystem=jgroups" "default-stack") || exit 1
+    debug "current default stack name: ${current_default_stack_name}"
+
+    if [ "${current_default_stack_name}" = "${default_stack}" ]; then
+        info "default stack already set to '${current_default_stack_name}'"
+    else
+        write-attribute "/subsystem=jgroups" "default-stack" "${default_stack}"
+        info "default stack set to '${default_stack}'"
+    fi
+
+    #
+    # configure initial hosts if necessary
+    #
+
+    if [ -n "${initial_hosts}" ]; then
+
+        [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+        local standalone_conf
+        standalone_conf=${JBOSS_HOME}/bin/standalone.conf
+        [ ! -f ${standalone_conf} ]  && fail "${standalone_conf} not found"
+
+        local jboss_cluster_tcp_initial_hosts_system_property="jboss.cluster.tcp.initial_hosts"
+
+        if grep -q "^JAVA_OPTS=\"\${JAVA_OPTS} -D${jboss_cluster_tcp_initial_hosts_system_property}=\"" ${standalone_conf}; then
+            info "'${jboss_cluster_tcp_initial_hosts_system_property}' already configured in ${standalone_conf}"
+        else
+
+            #
+            # resolve host names to addresses
+            #
+            echo "JAVA_OPTS=\"\${JAVA_OPTS} -D${jboss_cluster_tcp_initial_hosts_system_property}=${initial_hosts}\"" >> ${standalone_conf} && \
+                info "'${jboss_cluster_tcp_initial_hosts_system_property}' configured in ${standalone_conf} as ${initial_hosts}" ||
+                fail "failed to write ${standalone_conf}"
+        fi
+
+    fi
+
+}
+
+########################################################################################################################
+# END of jboss-configuration overlay functions
+########################################################################################################################

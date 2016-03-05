@@ -23,12 +23,8 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 process-overlay-arguments $@
 overlay-preconditions
 
-
-function configure-hornetq-nfs-based-active-node() {
-
-    fail "insure shared NFS file system exists"
-}
-
+subsystem=$(extract-from-overlay-args "subsystem" ${args})
+${subsystem}-configuration ${args}
 
 exit 0
 
