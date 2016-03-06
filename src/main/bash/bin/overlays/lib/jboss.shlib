@@ -722,7 +722,8 @@ function write-attribute() {
     [ -z "${attribute_name}" ] && fail "'attribute_name' not provided"
     [ -z "${attribute_value}" ] && fail "'attribute_value' not provided"
 
-    jboss-cli "${path}:write-attribute(name=\"${attribute_name}\",value=\"${attribute_value}\")"
+    local output
+    output=$(jboss-cli "${path}:write-attribute(name=\"${attribute_name}\",value=\"${attribute_value}\")") || exit 1
 }
 
 ########################################################################################################################
@@ -1272,6 +1273,9 @@ function jgroups-configuration() {
 
     [ -z "${default_stack}" ] && fail "no --default-stack specified"
 
+    debug "default_stack: ${default_stack}"
+    debug "initial_hosts: ${initial_hosts}"
+
     #
     # configure the default stack if not already set
     #
@@ -1308,8 +1312,22 @@ function jgroups-configuration() {
             #
             # resolve host names to addresses
             #
-            echo "JAVA_OPTS=\"\${JAVA_OPTS} -D${jboss_cluster_tcp_initial_hosts_system_property}=${initial_hosts}\"" >> ${standalone_conf} && \
-                info "'${jboss_cluster_tcp_initial_hosts_system_property}' configured in ${standalone_conf} as ${initial_hosts}" ||
+            local ips=""
+            initial_hosts=${initial_hosts//,/ }
+            for i in ${initial_hosts}; do
+                local host_name=${i%[*}
+                local postfix=${i:${#host_name}}
+                local ip
+                ip=$(get-internal-ip-for-name ${host_name}) || exit 1
+                i=${ip}${postfix}
+                debug "i: ${i}"
+                [ -z "${ips}" ] && ips="${i}" || ips="${ips},${i}"
+            done
+
+            debug "initial hosts: ${ips}"
+
+            echo "JAVA_OPTS=\"\${JAVA_OPTS} -D${jboss_cluster_tcp_initial_hosts_system_property}=${ips}\"" >> ${standalone_conf} && \
+                info "'${jboss_cluster_tcp_initial_hosts_system_property}' configured in ${standalone_conf} as ${ips}" ||
                 fail "failed to write ${standalone_conf}"
         fi
 

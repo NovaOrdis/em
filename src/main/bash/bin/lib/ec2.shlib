@@ -113,6 +113,8 @@ function ssh-url()
 #
 function insure-access-keys-are-correctly-set-up-or-fail()
 {
+    debug-arguments $@
+
     [ -z "${AWS_ACCESS_KEY}" ] && fail "AWS_ACCESS_KEY not set up in the overlay's environment. This probably means AWS_ACCESS_KEY was not set up in the calling remote client's environment. Re-run with --verbose to troubleshoot"
     [ -z "${AWS_SECRET_KEY}" ] && fail "AWS_SECRET_KEY not set up in the overlay's environment. This probably means AWS_SECRET_KEY was not set up in the calling remote client's environment. Re-run with --verbose to troubleshoot"
     [ -z "${EC2_URL}" ] && fail "EC2_URL not set up in the overlay's environment. This probably means EC2_URL was not set up in the calling remote client's environment. Re-run with --verbose to troubleshoot"
