@@ -559,7 +559,7 @@ function get-customized-source-init-script-content() {
         if [ "${mode}" = "domain" ]; then
             source_file=${JBOSS_HOME}/bin/init.d/jboss-as-domain.sh
         elif [ "${mode}" = "standalone" ]; then
-            fail "support for ${type}/${mode} NOT YET IMPLEMENTED"
+            source_file=${JBOSS_HOME}/bin/init.d/jboss-as-standalone.sh
         else
             fail "invalid mode '${mode}'"
         fi
