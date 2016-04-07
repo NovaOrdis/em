@@ -1292,7 +1292,7 @@ function jgroups-configuration() {
     fi
 
     #
-    # configure initial hosts if necessary
+    # configure initial hosts as a .conf file property 'jboss.cluster.tcp.initial_hosts' if necessary
     #
 
     if [ -n "${initial_hosts}" ]; then
@@ -1332,6 +1332,18 @@ function jgroups-configuration() {
         fi
 
     fi
+
+    #
+    # swap MPING with TCPPING
+    #
+
+    #
+    # if TCPPING was not installed: /subsystem=jgroups/stack=tcp/protocol=TCPPING/:read-attribute(name=type)
+    #
+
+    #
+    # 
+    #
 
 }
 
