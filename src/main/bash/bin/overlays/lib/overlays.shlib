@@ -13,8 +13,9 @@
 # ... (other arguments)
 #
 # Delegates processing of common options and exporting as global variables to std.shlib#process-common-arguments() and
-# extracts and exposes as global variables the common overlay arguments (for example 'name'). Then sets an "args" global
-# variable that contains the remaining parameters.
+# extracts and exposes as global variables the common overlay arguments (for example 'name').
+#
+# The remaining parameters that may be interesting to the actual overlay are stored into an "args" global variable.
 #
 # Usage:
 #           process-overlay-arguments $@
