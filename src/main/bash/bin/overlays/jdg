@@ -24,6 +24,10 @@ $(dirname $0)/jboss-standalone $@
 process-overlay-arguments $@
 overlay-preconditions
 
+#
+# configure the node applying jboss-configuration overlay
+#
+
 exit 0
 
 
