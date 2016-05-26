@@ -62,6 +62,6 @@ else
     update-server-list-in-host-xml
 fi
 
-configure-jboss-to-start-at-boot "domain" $(get-jboss-type $(get-environment-configuration "jboss_template"))
+configure-jboss-to-start-at-boot "domain" $(get-jboss-distribution $(get-environment-configuration "jboss_template"))
 
 exit 0

@@ -14,3 +14,24 @@ function to-ing
 
 }
 
+function post-processing() {
+
+    debug-arguments $@
+
+    local mode=$1
+    local ids=$2
+
+    if [ "${mode}" = "terminate" ]; then
+        #
+        # termination completed successfully, we remove the Name tag
+        #
+
+        local command="ec2-delete-tags ${ids} --tag Name"
+
+        debug "${command}"
+
+        ${command} || fail "failed to ${command}"
+
+        info "Name tag removed for ${ids}"
+    fi
+}

@@ -12,6 +12,10 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 # JBoss Standalone node overlay
 #
 
+# mode - can be 'standalone' or 'domain'
+# JBOSS_DISTRIBUTION - can be 'wildfly', 'eap', 'jdg'
+JBOSS_DISTRIBUTION=""
+
 #
 # dependencies
 #
@@ -27,15 +31,17 @@ $(dirname $0)/java $@
 process-overlay-arguments $@
 overlay-preconditions
 
+# figures out and sets JBOSS_DISTRIBUTION
 install-binaries
-update-user-environment-for-jboss root ${mode}
-update-user-environment-for-jboss ec2-user ${mode}
+
+update-user-environment-for-jboss root ${mode} ${JBOSS_DISTRIBUTION}
+update-user-environment-for-jboss ec2-user ${mode} ${JBOSS_DISTRIBUTION}
 add-a-management-user admin admin123
 configure-public-interface $(get-primary-ip)
 
 if [ ${mode} = "standalone" ]; then
-    profile=$(extract-from-overlay-args "profile" ${args}) || exit 1
-    configure-jboss-to-start-at-boot "standalone" ${JBOSS_TYPE} ${profile}
+    profile=$(extract-from-overlay-args "profile" ${args}) # it's OK if it is empty
+    configure-jboss-to-start-at-boot "standalone" ${JBOSS_DISTRIBUTION} ${profile}
     archive-irrelevant-standalone-files ${profile}
 fi
 

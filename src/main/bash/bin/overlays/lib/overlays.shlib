@@ -151,6 +151,6 @@ function extract-from-overlay-args() {
     done
 
     debug "argument_value: ${argument_value}"
-    [ -z "${argument_value}" ] && debug "failed to identify a value for ${argument_name} (--${argument_name}=<value>) amongst the overlay arguments: ${original_args}"
+    [ -z "${argument_value}" ] && debug "no value found for ${argument_name} (--${argument_name}=<value>) amongst the overlay arguments: ${original_args}"
     echo "${argument_value}"
 }

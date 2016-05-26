@@ -48,8 +48,15 @@ function main()
 
     local command="ec2-${mode}-instances ${ids}"
 
-    ${command} || fail "failed to ${mode}"
+    debug "${command}"
 
+    ${command} || fail "failed to ${mode}"
+    
+    #
+    # if the command executes successfully, do post-processing, depending on mode
+    #
+
+    post-processing ${mode} ${ids}
 }
 
 main $@

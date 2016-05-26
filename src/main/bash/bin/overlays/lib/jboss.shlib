@@ -2,10 +2,9 @@
 
 #
 # Successful installation exports the following in the environment:
-#
 #   1. a valid JBOSS_HOME
-#   2. a JBOSS_TYPE that is either "eap" or "wildfly"
-#
+#   2. a valid JBOSS_DISTRIBUTION ("wildfly", "eap" or "jdg")
+
 # return 0 if the installation modified state or 1 if not
 #
 function install-binaries() {
@@ -24,14 +23,17 @@ function install-binaries() {
 
     debug "jboss template file: ${jboss_template_file}"
 
-    export JBOSS_TYPE=$(get-jboss-type "${jboss_template_file}")
-    debug "exported JBOSS_TYPE=${JBOSS_TYPE}"
+    export JBOSS_DISTRIBUTION=$(get-jboss-distribution "${jboss_template_file}")
+    debug "exported JBOSS_DISTRIBUTION=${JBOSS_DISTRIBUTION}"
 
     local top_level_dir_in_archive
     top_level_dir_in_archive=$(get-top-level-dir-in-zip-archive ${jboss_template_file}) || \
         fail "failed to get the top level dir from archive ${jboss_template_file}"
 
+    debug "top level directory in archive: ${top_level_dir_in_archive}"
+
     local link_name=jboss
+    [ "${JBOSS_DISTRIBUTION}" = "jdg" ] && link_name=jdg
 
     if [ -d /opt/${top_level_dir_in_archive} ]; then
         debug "JBoss already installed (/opt/${top_level_dir_in_archive})"
@@ -64,9 +66,9 @@ function install-binaries() {
 }
 
 #
-# sends "wildfly" or "eap" to stdout
+# sends the JBoss distribution type ("wildfly", "eap", "jdg") to stdout
 #
-function get-jboss-type() {
+function get-jboss-distribution() {
 
     debug-arguments $@
 
@@ -77,6 +79,8 @@ function get-jboss-type() {
         echo "wildfly"
     elif [[ "${jboss_template_file_name}" =~ eap ]]; then
         echo "eap"
+    elif [[ "${jboss_template_file_name}" =~ datagrid ]]; then
+        echo "jdg"
     else
         fail "could not determine jboss type from ${jboss_template_file_name}"
     fi
@@ -89,8 +93,11 @@ function update-user-environment-for-jboss()
 
     local user=$1
     local mode=$2
+    local type=$3 # may be wildfly, eap, jdg
     [ -z "${user}" ] && fail "${FUNCNAME[0]}: 'name' not provided"
     [ -z "${mode}" ] && fail "${FUNCNAME[0]}: 'mode' not provided"
+    [ -z "${type}" ] && type=wildfly
+    [ ${type} = "wildfly" -o ${type} = "eap" -o ${type} = "jdg" ] || fail "unknown jboss type ${type}"
 
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
     [ -d ${JBOSS_HOME} ] || fail "${JBOSS_HOME} does not exist"
@@ -101,32 +108,36 @@ function update-user-environment-for-jboss()
 
     debug ".bashrc file: ${bashrc_file}"
 
-    if ! grep -q "^export JBOSS_HOME=${JBOSS_HOME}" ${bashrc_file}; then
-        echo "export JBOSS_HOME=${JBOSS_HOME}" >> ${bashrc_file}
-        info "JBOSS_HOME set for user ${user}"
+    local jboss_home_variable_name="JBOSS_HOME"
+    [ "${type}" = "jdg" ] && jboss_home_variable_name="JDG_HOME"
+    debug "jboss home variable name: ${jboss_home_variable_name}"
+
+    if ! grep -q "^export ${jboss_home_variable_name}=${JBOSS_HOME}" ${bashrc_file}; then
+        echo "export ${jboss_home_variable_name}=${JBOSS_HOME}" >> ${bashrc_file}
+        info "${jboss_home_variable_name} set for user ${user}"
         state_changed=true
     fi
 
     if ! grep -q "^alias jb=" ${bashrc_file}; then
-        echo "alias jb='cd \${JBOSS_HOME}'" >> ${bashrc_file}
+        echo "alias jb='cd \${${jboss_home_variable_name}}'" >> ${bashrc_file}
         info "'jb' alias created for user ${user}"
         state_changed=true
     fi
 
     if ! grep -q "^alias jbb=" ${bashrc_file}; then
-        echo "alias jbb='cd \${JBOSS_HOME}/bin'" >> ${bashrc_file}
+        echo "alias jbb='cd \${${jboss_home_variable_name}}/bin'" >> ${bashrc_file}
         info "'jbb' alias created for user ${user}"
         state_changed=true
     fi
 
     if ! grep -q "^alias jbc=" ${bashrc_file}; then
-        echo "alias jbc='cd \${JBOSS_HOME}/${mode}/configuration'" >> ${bashrc_file}
+        echo "alias jbc='cd \${${jboss_home_variable_name}}/${mode}/configuration'" >> ${bashrc_file}
         info "'jbc' alias created for user ${user}"
         state_changed=true
     fi
 
     if ! grep -q "^alias jbl=" ${bashrc_file}; then
-        echo "alias jbl='cd \${JBOSS_HOME}/${mode}/log'" >> ${bashrc_file}
+        echo "alias jbl='cd \${${jboss_home_variable_name}}/${mode}/log'" >> ${bashrc_file}
         info "'jbc' alias created for user ${user}"
         state_changed=true
     fi
@@ -177,7 +188,8 @@ function add-a-management-user()
 }
 
 #
-# Writes the actual IP address of the primary interface in both standalone.conf and domain.conf file.
+# Writes the actual IP address of the primary interface in all of the following (if they exist):
+# standalone.conf, domain.conf, clustered.conf.
 #
 # return 0 if the function changed state or 1 if not
 function configure-public-interface()
@@ -190,7 +202,7 @@ function configure-public-interface()
     [ -z "${ip}" ] && fail "${FUNCNAME[0]}: 'ip' not provided"
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
 
-    local configuration_files="standalone.conf domain.conf"
+    local configuration_files="standalone.conf domain.conf clustered.conf"
 
     for cf in ${configuration_files}; do
         local cf_path=${JBOSS_HOME}/bin/${cf}
@@ -456,20 +468,25 @@ function configure-jboss-to-start-at-boot() {
     debug-arguments $@
 
     local mode=$1 # must be either "standalone" or "domain"
-    local type=$2 # must be either "wildfly" or "eap"
+    local distribution=$2 # must be "wildfly", "eap", "jdg"
     local profile=$3 # it only makes sense for standalone, for domain profiles are associated with server groups
                      # in configuration; for standalone, it can be "" (meaning default), "ha", "full" and "full-ha"
     [ "${mode}" = "standalone" -o "${mode}" = "domain" ] || fail "'mode' must be either \"standalone\" or \"domain\" but it is \"${mode}\""
-    [ "${type}" = "wildfly" -o "${type}" = "eap" ] || fail "'type' must be either \"wildfly\" or \"eap\" but it is \"${type}\""
+    [ "${distribution}" = "wildfly" -o "${distribution}" = "eap" -o "${distribution}" = "jdg" ] || \
+        fail "invalid 'distribution' value: \"${distribution}\""
 
     [ -z ${JAVA_HOME} ] && fail "previous steps failed to export JAVA_HOME"
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
 
     local script_file
     local script_dir=/usr/lib/systemd/scripts
-    [ "${mode}" = "standalone" ] && \
-        script_file=${script_dir}/jboss-standalone || \
-        script_file=${script_dir}/jboss-host-controller
+    if [ "${distribution}" = "jdg" ]; then
+        script_file=${script_dir}/jboss-datagrid
+    else
+        [ "${mode}" = "standalone" ] && \
+            script_file=${script_dir}/jboss-standalone || \
+            script_file=${script_dir}/jboss-host-controller
+    fi
 
     #
     # create the System V init script in the systemd script directory if it is not already there
@@ -478,7 +495,7 @@ function configure-jboss-to-start-at-boot() {
     if [ ! -f ${script_file} ]; then
 
         local init_script_content
-        init_script_content=$(get-customized-source-init-script-content "${type}" "${mode}" "${profile}") || exit 1
+        init_script_content=$(get-customized-source-init-script-content "${distribution}" "${mode}" "${profile}") || exit 1
         echo "${init_script_content}" > ${script_file} && \
             info "wrote customized systemd ExecStart= script ${script_file}" || \
             fail "failed to write customized systemd ExecStart= script ${script_file}"
@@ -503,9 +520,14 @@ function configure-jboss-to-start-at-boot() {
     if [ -f ${unit_file} ]; then
         info "systemd unit file ${unit_file} already exists"
     else
+
+        local description="JBoss Service"
+
+        [ "${distribution}" = "jdg" ] && description="JBoss Datagrid Service"
+
         (cat << EOF
 [Unit]
-Description=JBoss Service
+Description=${description}
 After=network.target
 
 [Service]
@@ -535,27 +557,33 @@ EOF
 
 #
 # returns at stdout the content of the customized init script to used for startup. It is usually based on
-# the appropriate ${JBOSS_HOME}/bin/init.d script, depending on mode and type (wildfly, eap, etc).
+# the appropriate ${JBOSS_HOME}/bin/init.d script, depending on mode and distribution (wildfly, eap, etc).
 #
 function get-customized-source-init-script-content() {
 
     debug-arguments $@
 
-    local type=$1 # must be either "wildfly" or "eap"
+    local distribution=$1 # must be either "wildfly", "eap", "jdg"
     local mode=$2 # must be either "standalone" or "domain"
     local profile=$3 # it only makes sense for standalone, for domain profiles are associated with server groups
                      # in configuration; for standalone, it can be "" (meaning default), "ha", "full" and "full-ha"
 
     [ "${mode}" = "standalone" -o "${mode}" = "domain" ] || \
         fail "'mode' must be either \"standalone\" or \"domain\" but it is \"${mode}\""
-    [ "${type}" = "wildfly" -o "${type}" = "eap" ] || \
-        fail "'type' must be either \"wildfly\" or \"eap\" but it is \"${type}\""
+    [ "${distribution}" = "wildfly" -o "${distribution}" = "eap" -o "${distribution}" = "jdg" ] || \
+        fail "'distribution' must be \"wildfly\", \"eap\" or \"jdg\" but it is \"${distribution}\""
     [ "${profile}" = "" -o "${profile}" = "ha" -o "${profile}" = "full" -o "${profile}" = "full-ha" ] || \
         fail "'profile' must be one of \"\", \"ha\", \"full\" or \"full-ha\" but it is \"${profile}\""
 
     local source_file
 
-    if [ "${type}" = "eap" ]; then
+    local jboss_home_variable_name=JBOSS_HOME
+    local jboss_user_variable_name=JBOSS_USER
+    local jboss_config_variable_name=JBOSS_CONFIG
+    local jboss_console_log_variable_name=JBOSS_CONSOLE_LOG
+
+    if [ "${distribution}" = "eap" ]; then
+
         if [ "${mode}" = "domain" ]; then
             source_file=${JBOSS_HOME}/bin/init.d/jboss-as-domain.sh
         elif [ "${mode}" = "standalone" ]; then
@@ -563,9 +591,10 @@ function get-customized-source-init-script-content() {
         else
             fail "invalid mode '${mode}'"
         fi
-    elif [ "${type}" = "wildfly" ]; then
+    elif [ "${distribution}" = "wildfly" ]; then
+
         if [ "${mode}" = "domain" ]; then
-            fail "support for ${type}/${mode} NOT YET IMPLEMENTED"
+            fail "support for ${distribution}/${mode} NOT YET IMPLEMENTED"
         elif [ "${mode}" = "standalone" ]; then
 
             source_file=${JBOSS_HOME}/bin/init.d/wildfly-init-redhat.sh
@@ -579,12 +608,22 @@ function get-customized-source-init-script-content() {
                 source_file=${JBOSS_HOME}/docs/contrib/scripts/init.d/wildfly-init-redhat.sh
             fi
 
-            [ ! -f ${source_file} ] && fail "no init file found for ${mode} ${type}"
+            [ ! -f ${source_file} ] && fail "no init file found for ${mode} ${distribution}"
         else
             fail "invalid mode '${mode}'"
         fi
+    elif [ "${distribution}" = "jdg" ]; then
+
+        jboss_home_variable_name=ISPN_SERVER_HOME
+        jboss_user_variable_name=ISPN_SERVER_USER
+        jboss_config_variable_name=ISPN_SERVER_CONFIG
+        jboss_console_log_variable_name=ISPN_SERVER_CONSOLE_LOG
+
+        source_file=${JBOSS_HOME}/bin/init.d/jboss-datagrid.sh
+        [ ! -f ${source_file} ] && fail "no init file found for ${distribution}"
+
     else
-        fail "invalid type '${type}'"
+        fail "invalid distribution '${type}'"
     fi
 
     #
@@ -592,11 +631,18 @@ function get-customized-source-init-script-content() {
     # as the profiles are associated with server groups in configuration
     #
     local profile_line=""
-    if [ "${mode}" = "standalone" ]; then
-        profile_line="JBOSS_CONFIG=standalone"
-        [ "${profile}" != "" ] && profile_line="${profile_line}-${profile}"
-        profile_line="${profile_line}.xml"
+    if [ "${distribution}" = "jdg" ]; then
+        profile_line=${jboss_config_variable_name}=clustered.xml
+    else
+        if [ "${mode}" = "standalone" ]; then
+            profile_line="${jboss_config_variable_name}=standalone"
+            [ "${profile}" != "" ] && profile_line="${profile_line}-${profile}"
+            profile_line="${profile_line}.xml"
+        fi
     fi
+
+    local jboss_home_variable_reference="\${${jboss_home_variable_name}}"
+    local jboss_user_variable_reference="\${${jboss_user_variable_name}}"
 
     cat << EOF
 #!/bin/bash
@@ -604,8 +650,8 @@ function get-customized-source-init-script-content() {
 # JBoss ExecStart=/ExecStop= script
 #
 
-JBOSS_HOME=${JBOSS_HOME}
-JBOSS_USER=root
+${jboss_home_variable_name}=${JBOSS_HOME}
+${jboss_user_variable_name}=root
 ${profile_line}
 
 #
@@ -619,8 +665,8 @@ SHUTDOWN_WAIT=30
 #
 # Location to keep the console log
 #
-JBOSS_CONSOLE_LOG=\${JBOSS_HOME}/${mode}/log/console.log
-[ ! -d \${JBOSS_HOME}/${mode}/log ] && { mkdir -p \${JBOSS_HOME}/${mode}/log; chown \${JBOSS_USER} \${JBOSS_HOME}/${mode}/log; chmod a+rx \${JBOSS_HOME}/${mode}/log; }
+${jboss_console_log_variable_name}=${jboss_home_variable_reference}/${mode}/log/console.log
+[ ! -d ${jboss_home_variable_reference}/${mode}/log ] && { mkdir -p ${jboss_home_variable_reference}/${mode}/log; chown ${jboss_user_variable_reference} ${jboss_home_variable_reference}/${mode}/log; chmod a+rx ${jboss_home_variable_reference}/${mode}/log; }
 
 EOF
 
@@ -1242,6 +1288,11 @@ function archive-irrelevant-standalone-files() {
     debug "configuration file name: ${configuration_file_name}"
 
     for i in ${configuration_dir}/standalone*; do
+
+        if [ -d ${i} ]; then
+            debug "ignoring directory ${i}"
+            continue
+        fi
 
         local bi=$(basename ${i})
         debug "file name: ${bi}"

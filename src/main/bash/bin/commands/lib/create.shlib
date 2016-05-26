@@ -66,7 +66,7 @@ function process-create-command-line-options()
 #       }
 #
 
-create_option_ami_id="ami-4dbf9e7d"
+create_option_ami_id="ami-775e4f16"
 function handle-ec2-run-instances-option-ami_id()
 {
     debug-arguments $@
