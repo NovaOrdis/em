@@ -28,7 +28,8 @@ function setup-nfs-server-identity()
 
 #
 # Install authorized keys for external users. If gets the keys from the environment's "authorized-keys" directory and
-# installs them into ec2-user's authorized_keys file
+# installs them into ec2-user's authorized_keys file. The function looks at files only, the "authorized-keys"
+# directory's sub-directories will be ignored
 #
 # This step requires NFS (unless it's done locally on the NFS server)
 #
@@ -42,6 +43,13 @@ function install-authorized-keys()
 
     local key_name
     for i in $(ls ${env_authorized_keys_dir}); do
+        if [ -d ${env_authorized_keys_dir}/${i} ]; then
+            #
+            # ignore the sub-directories, only look at the top level files
+            #
+            info "sub-directory ${env_authorized_keys_dir}/${i} ignored ..."
+            continue
+        fi
         key_name=$(install-authorized-key ${env_authorized_keys_dir}/${i} ec2-user) && \
             info "installed ${key_name} key into ec2-user's authorized_keys file"  || \
             info "${key_name} key already in ec2-user's authorized_keys"
