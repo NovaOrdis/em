@@ -39,6 +39,7 @@ function install-binaries() {
         debug "JBoss already installed (/opt/${top_level_dir_in_archive})"
         [ ! -h /opt/${link_name} ] && fail "JBoss already installed as /opt/${top_level_dir_in_archive} but /opt/${link_name} link not created"
         export JBOSS_HOME=/opt/${link_name}
+        debug "exported JBOSS_HOME=${JBOSS_HOME}"
         return 1;
     fi
 
@@ -177,7 +178,21 @@ function add-a-management-user()
     #
     # add a management user
     #
-    if ! grep -q "^${management_user_name}=" ${JBOSS_HOME}/standalone/configuration/mgmt-users.properties || ! grep -q "^${management_user_name}=" ${JBOSS_HOME}/domain/configuration/mgmt-users.properties; then
+    local need_to_add_user=false
+
+    if [ -f ${JBOSS_HOME}/standalone/configuration/mgmt-users.properties ]; then
+        if ! grep -q "^${management_user_name}=" ${JBOSS_HOME}/standalone/configuration/mgmt-users.properties; then
+          need_to_add_user=true
+        fi
+    fi
+
+    if [ -f ${JBOSS_HOME}/domain/configuration/mgmt-users.properties ]; then
+        if ! grep -q "^${management_user_name}=" ${JBOSS_HOME}/domain/configuration/mgmt-users.properties; then
+          need_to_add_user=true
+        fi
+    fi
+
+    if ${need_to_add_user} ; then
         ${JBOSS_HOME}/bin/add-user.sh -r ManagementRealm -u ${management_user_name} -p "${management_user_password}" || \
             fail "failed to execute ${JBOSS_HOME}/bin/add-user.sh"
         # no need for info, add-user.sh reports at stdout
@@ -207,7 +222,7 @@ function configure-public-interface()
     for cf in ${configuration_files}; do
         local cf_path=${JBOSS_HOME}/bin/${cf}
         if [ ! -f ${cf_path} ]; then
-            info "${cf_path} does not exist, no configuration will be written in it"
+            debug "${cf_path} does not exist, no configuration will be written in it"
         else
             local environment_variable_name=JAVA_OPTS
             [ "${cf}" = "domain.conf" ] && environment_variable_name=HOST_CONTROLLER_JAVA_OPTS
@@ -678,6 +693,16 @@ EOF
 ########################################################################################################################
 
 #
+# Most distributions name their JBoss CLI wrapper script jboss-cli.sh, but there are some distributions, like JDG, which
+# name their CLI wrapper differently.
+#
+function get-cli-wrapper-script-name() {
+
+    [ "${JBOSS_DISTRIBUTION}" = "jdg" ] && { echo "cli.sh"; return 0; }
+    echo "jboss-cli.sh"
+}
+
+#
 # Connects locally or remotely and executes the given command. It needs the target instance to be up and running.
 #
 function jboss-cli() {
@@ -701,8 +726,11 @@ function jboss-cli() {
         connect_args="-c"
     fi
 
+    local cli_wrapper_script
+    cli_wrapper_script=$(get-cli-wrapper-script-name) || exit 1
+
     local output
-    if output=$(${JBOSS_HOME}/bin/jboss-cli.sh ${connect_args} <<EOF
+    if output=$(${JBOSS_HOME}/bin/${cli_wrapper_script} ${connect_args} <<EOF
 ${command}
 EOF
 ); then
@@ -1350,38 +1378,41 @@ function jgroups-configuration() {
 
         [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
 
-        local standalone_conf
-        standalone_conf=${JBOSS_HOME}/bin/standalone.conf
-        [ ! -f ${standalone_conf} ]  && fail "${standalone_conf} not found"
+        #
+        # resolve host names to addresses
+        #
+        local ips=""
+        initial_hosts=${initial_hosts//,/ }
+        for i in ${initial_hosts}; do
+            local host_name=${i%[*}
+            local postfix=${i:${#host_name}}
+            local ip
+            ip=$(get-internal-ip-for-name ${host_name}) || exit 1
+
+            [ -z "${ip}" ] && fail "host name ${i} cannot be resolved to an ip address"
+
+            i=${ip}${postfix}
+            debug "i: ${i}"
+            [ -z "${ips}" ] && ips="${i}" || ips="${ips},${i}"
+        done
+
+        debug "initial hosts: ${ips}"
 
         local jboss_cluster_tcp_initial_hosts_system_property="jboss.cluster.tcp.initial_hosts"
 
-        if grep -q "^JAVA_OPTS=\"\${JAVA_OPTS} -D${jboss_cluster_tcp_initial_hosts_system_property}=\"" ${standalone_conf}; then
-            info "'${jboss_cluster_tcp_initial_hosts_system_property}' already configured in ${standalone_conf}"
-        else
+        local conf_files="standalone.conf clustered.conf"
 
-            #
-            # resolve host names to addresses
-            #
-            local ips=""
-            initial_hosts=${initial_hosts//,/ }
-            for i in ${initial_hosts}; do
-                local host_name=${i%[*}
-                local postfix=${i:${#host_name}}
-                local ip
-                ip=$(get-internal-ip-for-name ${host_name}) || exit 1
-                i=${ip}${postfix}
-                debug "i: ${i}"
-                [ -z "${ips}" ] && ips="${i}" || ips="${ips},${i}"
-            done
-
-            debug "initial hosts: ${ips}"
-
-            echo "JAVA_OPTS=\"\${JAVA_OPTS} -D${jboss_cluster_tcp_initial_hosts_system_property}=${ips}\"" >> ${standalone_conf} && \
-                info "'${jboss_cluster_tcp_initial_hosts_system_property}' configured in ${standalone_conf} as ${ips}" ||
-                fail "failed to write ${standalone_conf}"
-        fi
-
+        for i in ${conf_files}; do
+            local file=${JBOSS_HOME}/bin/${i}
+            [ ! -f ${file} ] && continue
+            if grep -q "^JAVA_OPTS=\"\${JAVA_OPTS} -D${jboss_cluster_tcp_initial_hosts_system_property}=\"" ${file}; then
+                info "'${jboss_cluster_tcp_initial_hosts_system_property}' already configured in ${file}"
+            else
+                echo "JAVA_OPTS=\"\${JAVA_OPTS} -D${jboss_cluster_tcp_initial_hosts_system_property}=${ips}\"" >> ${file} && \
+                    info "'${jboss_cluster_tcp_initial_hosts_system_property}' configured in ${file} as ${ips}" ||
+                    fail "failed to write ${file}"
+            fi
+        done
     fi
 
     #

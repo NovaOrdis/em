@@ -5,6 +5,7 @@ lib=$(dirname $0)/../lib/em.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} n
 lib=$(dirname $0)/../lib/ec2.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/../lib/linux.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/overlays.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
+lib=$(dirname $0)/lib/jboss.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 
 #
@@ -23,10 +24,30 @@ $(dirname $0)/jboss-standalone $@
 
 process-overlay-arguments $@
 overlay-preconditions
+import-environment-variables
+
+debug "JBOSS_HOME exported by jboss-standalone: ${JBOSS_HOME}"
+debug "JBOSS_DISTRIBUTION exported by jboss-standalone: ${JBOSS_DISTRIBUTION}"
+debug "JBOSS_MODE exported by jboss-standalone: ${JBOSS_MODE}"
 
 #
-# configure the node applying jboss-configuration overlay
+# restart the node, we need it running to be able to access it over CLI
 #
+info "stopping JDG instance ..."
+systemctl stop jboss-datagrid
+
+info "starting JDG instance ..."
+systemctl start jboss-datagrid || fail "failed to start jboss-datagrid"
+
+#
+# get JDG-specific configuration from the em command line
+#
+jgroups_configuration_command_line_args=$(process-jdg-specific-args ${args}) || exit 1
+
+#
+# configure the node by applying the same functions jboss-configuration overlay uses
+#
+jgroups-configuration ${jgroups_configuration_command_line_args}
 
 exit 0
 

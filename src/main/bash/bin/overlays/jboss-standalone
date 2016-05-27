@@ -11,10 +11,15 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 #
 # JBoss Standalone node overlay
 #
+# Sends to stdout VAR=VALUE lines representing variables to be set up as global variables by the invoking (dependents)
+# overlays. The output can be converted automatically to exported environment variables by the
+# overlays.export-variables() function
+#
 
-# mode - can be 'standalone' or 'domain'
 # JBOSS_DISTRIBUTION - can be 'wildfly', 'eap', 'jdg'
 JBOSS_DISTRIBUTION=""
+
+# JBOSS_MODE - can be 'standalone' or 'domain'
 
 #
 # dependencies
@@ -26,24 +31,29 @@ $(dirname $0)/java $@
 # overlay
 #
 
-[ -z "${SUBORDINATE_HOST_CONTROLLER}" -a -z "${DOMAIN_CONTROLLER}" ] && mode="standalone" || mode="domain"
+[ -z "${SUBORDINATE_HOST_CONTROLLER}" -a -z "${DOMAIN_CONTROLLER}" ] && JBOSS_MODE="standalone" || JBOSS_MODE="domain"
 
 process-overlay-arguments $@
 overlay-preconditions
 
-# figures out and sets JBOSS_DISTRIBUTION
+# figures out and sets JBOSS_HOME, JBOSS_DISTRIBUTION
 install-binaries
 
-update-user-environment-for-jboss root ${mode} ${JBOSS_DISTRIBUTION}
-update-user-environment-for-jboss ec2-user ${mode} ${JBOSS_DISTRIBUTION}
+update-user-environment-for-jboss root ${JBOSS_MODE} ${JBOSS_DISTRIBUTION}
+update-user-environment-for-jboss ec2-user ${JBOSS_MODE} ${JBOSS_DISTRIBUTION}
 add-a-management-user admin admin123
 configure-public-interface $(get-primary-ip)
 
-if [ ${mode} = "standalone" ]; then
+if [ ${JBOSS_MODE} = "standalone" ]; then
     profile=$(extract-from-overlay-args "profile" ${args}) # it's OK if it is empty
     configure-jboss-to-start-at-boot "standalone" ${JBOSS_DISTRIBUTION} ${profile}
     archive-irrelevant-standalone-files ${profile}
 fi
+
+#
+# export environment variables to be used by dependents
+#
+export-environment-variables JBOSS_HOME JBOSS_DISTRIBUTION JBOSS_MODE
 
 exit 0
 

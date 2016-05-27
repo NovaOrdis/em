@@ -8,7 +8,12 @@ function usage()
 cat <<EOF
 
 Query the current Amazon EC2 region \$EC2_URL (${EC2_URL})
-and display the state the environment instances are in.
+and display the state the environment instances are in. By default, it omits the terminated
+instances.
+
+Options:
+
+    --all - display all instances, including the terminated instances
 
 
 EOF
@@ -23,7 +28,15 @@ function main()
 
     ${help} && usage;
 
-    ec2-describe-instances | jw ec2.grep_instances --table name:state:id:public-ip:private-ip
+    local filter="grep -v terminated"
+
+    for i do
+        [ "${i}" = "--all" ] && filter="cat"
+    done
+
+    debug "filter: ${filter}"
+
+    ec2-describe-instances | jw ec2.grep_instances --table name:state:id:public-ip:private-ip | ${filter}
 
 }
 
