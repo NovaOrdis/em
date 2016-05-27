@@ -30,6 +30,16 @@ debug "JBOSS_HOME exported by jboss-standalone: ${JBOSS_HOME}"
 debug "JBOSS_DISTRIBUTION exported by jboss-standalone: ${JBOSS_DISTRIBUTION}"
 debug "JBOSS_MODE exported by jboss-standalone: ${JBOSS_MODE}"
 
+cluster=$(extract-from-overlay-args "cluster" $@)
+[ -z "${cluster}" ] && fail "the JDG cluster (all member names) must be specified for the tcp transport, use --cluster=node1,node2,node3"
+initial_hosts=$(initial-hosts-list-to-valid-initial-hosts-list "${cluster}") || exit 1
+debug "initial_hosts: ${initial_hosts}"
+
+#
+# set this before restart so the instance picks them up upon startup
+#
+jgroups-set-initial_hosts-as-property "${initial_hosts}"
+
 #
 # restart the node, we need it running to be able to access it over CLI
 #
@@ -39,18 +49,11 @@ systemctl stop jboss-datagrid
 info "starting JDG instance ..."
 systemctl start jboss-datagrid || fail "failed to start jboss-datagrid"
 
-#
-# get JDG-specific configuration from the em command line
-#
-jgroups_configuration_command_line_args=$(process-jdg-specific-args ${args}) || exit 1
-
-#
-# configure the node by applying the same functions jboss-configuration overlay uses
-#
-jgroups-configuration ${jgroups_configuration_command_line_args}
+jgroups-set-default-stack "tcp"
+jgroups-swap-MPING-with-TCPPING
+reload
 
 exit 0
-
 
 
 

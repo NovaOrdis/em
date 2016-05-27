@@ -705,9 +705,15 @@ function get-cli-wrapper-script-name() {
 #
 # Connects locally or remotely and executes the given command. It needs the target instance to be up and running.
 #
+# returns 0 if the command executes successfully, and sends the ouptut of the command to stdout
+# returns 1 if the command executes with a "failure" outcome, and sends the output of the command to stdout
+# fails if the command fails to execute
+#
 function jboss-cli() {
 
     debug-arguments $@
+
+    debug "JBOSS_HOME: ${JBOSS_HOME}"
 
     local command=$1 # the command
     [ -z "${command}" ] && fail "'command' not provided"
@@ -737,15 +743,30 @@ EOF
         # success
         debug "CLI invocation success: ${output}"
         echo ${output}
+        return 0
    else
-        fail "failed to execute JBoss CLI ${connect_args} command: ${output}"
+        if [ -n "${output}" ]; then
+            #
+            # the CLI process returned with a failure, but it did contact the server and got something
+            # from it. Return 1 and put the server output at stdout
+            #
+            debug "CLI invocation failure: ${output}"
+            echo ${output}
+            return 1
+        else
+            fail "failed to execute JBoss CLI ${connect_args} command"
+        fi
    fi
 }
 
 #
-# Returns the attribute value at stdout
-# If the attribute is undefined, returns empty string at stdout
+# Returns 0 and the attribute value at stdout.
+# If the attribute is undefined, returns 1 and an empty string at stdout
 # If the call is unsuccessful, the function call fails
+#
+# Usage example:
+#
+# read-attribute "/subsystem=jgroups" "default-stack"
 #
 function read-attribute() {
 
@@ -761,25 +782,39 @@ function read-attribute() {
     [ -z "${attribute_name}" ] && fail "'attribute_name' not provided"
 
     local value
-    value=$(jboss-cli "${path}:read-attribute(name=${attribute_name})") || exit 1
+    value=$(jboss-cli "${path}:read-attribute(name=${attribute_name})") || fail "JBoss CLI invocation failed"
 
     if ! echo "${value}" | grep -q "\"outcome\" *=> * \"success\""; then
         fail "read-attribute failed"
     fi
 
     debug "read-attribute invocation successful"
-    value=$(echo "${value}" | sed -e 's/.*\"result\" *=> *\"\(.*\)\" }.*$/\1/')
+    value=$(echo "${value}" | sed -e 's/^.*\"result\" *=> *\(.*\),.*$/\1/')
     debug "value: ${value}"
 
     if [ "${value}" = "undefined" ]; then
         echo ""
+        return 1
     else
+
+        #
+        # strip quotes if any
+        #
+        value=${value#\"}
+        value=${value%\"}
         echo "${value}"
+        return 0
     fi
 }
 
 #
-# Writes the attribute value
+# Writes the attribute value for the given attribute.
+#
+# TODO what happens if the attribute does not exist?
+#
+# Usage example:
+#
+# write-attribute /subsystem=jgroups/stack=tcp/protocol=MPING/ comment "some comment"
 #
 function write-attribute() {
 
@@ -797,7 +832,145 @@ function write-attribute() {
     [ -z "${attribute_value}" ] && fail "'attribute_value' not provided"
 
     local output
-    output=$(jboss-cli "${path}:write-attribute(name=\"${attribute_name}\",value=\"${attribute_value}\")") || exit 1
+    output=$(jboss-cli "${path}:write-attribute(name=\"${attribute_name}\",value=\"${attribute_value}\")") || \
+        fail "JBoss CLI invocation failed"
+}
+
+#
+# Removes the given attribute by writing an empty value
+#
+# Usage example:
+#
+# remove-attribute /subsystem=jgroups/stack=tcp/protocol=MPING/ socket-binding
+#
+function remove-attribute() {
+
+    debug-arguments $@
+
+    local path=$1 # the resource path
+    local attribute_name=$2 # the attribute name
+    local host_and_port=$3 # the host:port if not local invocation (empty if local invocation)
+    local username=$4 # username (empty if local invocation)
+    local password=$5 # password (empty if local invocation)
+
+    [ -z "${path}" ] && fail "'path' not provided"
+    [ -z "${attribute_name}" ] && fail "'attribute_name' not provided"
+
+    local output
+    output=$(jboss-cli "${path}:write-attribute(name=\"${attribute_name}\")") || \
+        fail "JBoss CLI invocation failed"
+}
+
+#
+# Returns 0 and puts the result of :read-resource command on stdout
+# Returns 1 if the resource does not exist
+#
+function read-resource() {
+
+    debug-arguments $@
+
+    local path=$1 # the resource path
+    local host_and_port=$2 # the host:port if not local invocation (empty if local invocation)
+    local username=$3 # username (empty if local invocation)
+    local password=$4 # password (empty if local invocation)
+
+    [ -z "${path}" ] && fail "'path' not provided"
+
+    local value
+    value=$(jboss-cli "${path}:read-resource") || return 1
+    echo "${value}"
+}
+
+#
+# Adds the resource with the given type, name and value to the specified parent resource
+#
+# Usage example:
+#
+# add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING/" "property" "initial_hosts" "jdg1,jdg2"
+#
+# will result in creation of "/subsystem=jgroups/stack=tcp/protocol=MPING/property=initial_hosts with the value "jdg1,jdg2"
+#
+function add-resource() {
+
+    debug-arguments $@
+
+    local path=$1 # the resource path
+    local resource_type=$2
+    local resource_name=$3
+    local resource_value=$4
+    local host_and_port=$5 # the host:port if not local invocation (empty if local invocation)
+    local username=$6 # username (empty if local invocation)
+    local password=$7 # password (empty if local invocation)
+
+    [ -z "${path}" ] && fail "'path' not provided"
+    [ -z "${resource_type}" ] && fail "'resource_type' not provided"
+    [ -z "${resource_name}" ] && fail "'resource_name' not provided"
+    [ -z "${resource_value}" ] && fail "'resource_value' not provided"
+
+    #
+    # clean trailing /
+    #
+    path=${path%/}
+
+    local output
+    output=$(jboss-cli "${path}/${resource_type}=${resource_name}:add(value=\"${resource_value}\")") || \
+        fail "JBoss CLI invocation failed"
+}
+
+#
+# Returns 0 if the resource was successfully removed
+# Returns 1 if the resource does not exist
+#
+function remove-resource() {
+
+    debug-arguments $@
+
+    local path=$1 # the resource path
+    local host_and_port=$2 # the host:port if not local invocation (empty if local invocation)
+    local username=$3 # username (empty if local invocation)
+    local password=$4 # password (empty if local invocation)
+
+    [ -z "${path}" ] && fail "'path' not provided"
+
+    local value
+    value=$(jboss-cli "${path}:remove") || return 1
+}
+
+#
+# Returns 0 if the specified resource exists or 1 if not. Requries the CLI path of the resource.
+#
+function resource-exists() {
+
+    debug-arguments $@
+
+    local path=$1 # the resource path
+    local host_and_port=$2 # the host:port if not local invocation (empty if local invocation)
+    local username=$3 # username (empty if local invocation)
+    local password=$4 # password (empty if local invocation)
+
+    [ -z "${path}" ] && fail "'path' not provided"
+
+    local output
+    output=$(read-resource ${path}) || return 1
+}
+
+#
+# reloads the management model by restarting the server, but not the JVM
+#
+# Fails if the reload does not complete successful
+#
+function reload() {
+
+    debug-arguments $@
+
+    local host_and_port=$1 # the host:port if not local invocation (empty if local invocation)
+    local username=$2 # username (empty if local invocation)
+    local password=$3 # password (empty if local invocation)
+
+    local output
+    output=$(jboss-cli "reload") || fail "CLI reload command failed"
+
+    info "JBoss instance management model reloaded"
 }
 
 ########################################################################################################################
@@ -1064,7 +1237,8 @@ function is-valid-server-group() {
     local server_group=$1
     local domain_controller_ip_address=$2
 
-    local output=$(jboss-cli "ls /server-group" ${domain_controller_ip_address}:9999 "admin" "admin123") || exit 1
+    local output=$(jboss-cli "ls /server-group" ${domain_controller_ip_address}:9999 "admin" "admin123") || \
+        fail "JBoss CLI invocation failed"
     local server_groups=$(echo ${output} | sed -e 's/^.*ls \/server-group \(.*\) \[.*$/\1/') || exit 1
     debug "server_groups: ${server_groups}"
     local sg
@@ -1355,78 +1529,190 @@ function jgroups-configuration() {
     debug "default_stack: ${default_stack}"
     debug "initial_hosts: ${initial_hosts}"
 
-    #
-    # configure the default stack if not already set
-    #
-
-    local current_default_stack_name
-    current_default_stack_name=$(read-attribute "/subsystem=jgroups" "default-stack") || exit 1
-    debug "current default stack name: ${current_default_stack_name}"
-
-    if [ "${current_default_stack_name}" = "${default_stack}" ]; then
-        info "default stack already set to '${current_default_stack_name}'"
-    else
-        write-attribute "/subsystem=jgroups" "default-stack" "${default_stack}"
-        info "default stack set to '${default_stack}'"
-    fi
-
-    #
-    # configure initial hosts as a .conf file property 'jboss.cluster.tcp.initial_hosts' if necessary
-    #
+    jgroups-set-default-stack ${default_stack}
 
     if [ -n "${initial_hosts}" ]; then
-
-        [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
-
-        #
-        # resolve host names to addresses
-        #
-        local ips=""
-        initial_hosts=${initial_hosts//,/ }
-        for i in ${initial_hosts}; do
-            local host_name=${i%[*}
-            local postfix=${i:${#host_name}}
-            local ip
-            ip=$(get-internal-ip-for-name ${host_name}) || exit 1
-
-            [ -z "${ip}" ] && fail "host name ${i} cannot be resolved to an ip address"
-
-            i=${ip}${postfix}
-            debug "i: ${i}"
-            [ -z "${ips}" ] && ips="${i}" || ips="${ips},${i}"
-        done
-
-        debug "initial hosts: ${ips}"
-
-        local jboss_cluster_tcp_initial_hosts_system_property="jboss.cluster.tcp.initial_hosts"
-
-        local conf_files="standalone.conf clustered.conf"
-
-        for i in ${conf_files}; do
-            local file=${JBOSS_HOME}/bin/${i}
-            [ ! -f ${file} ] && continue
-            if grep -q "^JAVA_OPTS=\"\${JAVA_OPTS} -D${jboss_cluster_tcp_initial_hosts_system_property}=\"" ${file}; then
-                info "'${jboss_cluster_tcp_initial_hosts_system_property}' already configured in ${file}"
-            else
-                echo "JAVA_OPTS=\"\${JAVA_OPTS} -D${jboss_cluster_tcp_initial_hosts_system_property}=${ips}\"" >> ${file} && \
-                    info "'${jboss_cluster_tcp_initial_hosts_system_property}' configured in ${file} as ${ips}" ||
-                    fail "failed to write ${file}"
-            fi
-        done
+        initial_hosts=$(initial-hosts-list-to-valid-initial-hosts-list "${inital_hosts}") || exit 1
+        jgroups-set-initial_hosts-as-property "${initial_hosts}"
     fi
 
-    #
-    # swap MPING with TCPPING
-    #
+    jgroups-swap-MPING-with-TCPPING
+
+    reload
+}
+
+#
+# idempotently sets the default stack to the value passed as argument
+#
+# return 0 if state was changed
+# return 1 if no state was changed
+#
+# DOES NOT reload the configuration, it must be done externally
+#
+function jgroups-set-default-stack() {
+
+    debug-arguments $@
+
+    local new_stack=$1
+
+    [ -z "${new_stack}" ] && fail "'new_stack' not specified"
+
+    local current_stack
+    current_stack=$(read-attribute "/subsystem=jgroups" "default-stack") || fail "fail to read the value of the current default stack"
+
+    debug "current stack: ${current_stack}"
+    debug "new stack: ${new_stack}"
+
+    if [ "${current_stack}" = "${new_stack}" ]; then
+        info "default_stack already set to ${new_stack}"
+        return 1
+    fi
+
+    write-attribute "/subsystem=jgroups" "default-stack" ${new_stack} || fail "failed to write the default stack"
+
+    info "set default_stack to ${new_stack}"
+}
+
+#
+# idempotently replace MPING with TCPPING
+#
+# return 0 if state was changed
+# return 1 if no state was changed
+#
+# DOES NOT reload the configuration, it must be done externally
+#
+function jgroups-swap-MPING-with-TCPPING() {
+
+    debug-arguments $@
+
+    local output
+    local state_changed=false
 
     #
-    # if TCPPING was not installed: /subsystem=jgroups/stack=tcp/protocol=TCPPING/:read-attribute(name=type)
+    # if TCPPING already exists, return
     #
 
-    #
-    # 
-    #
+    if resource-exists "/subsystem=jgroups/stack=tcp/protocol=TCPPING"; then
+        info "TCPPING already present"
+        return 1
+    fi
 
+    debug "TCPPING does not seem to exist, swapping MPING with TCPPING ..."
+
+    write-attribute "/subsystem=jgroups/stack=tcp/protocol=MPING" "type" "TCPPING"
+
+    info "MPING replaced with TCPPING"
+
+    if output=$(read-attribute "/subsystem=jgroups/stack=tcp/protocol=MPING" "socket-binding"); then
+        remove-attribute "/subsystem=jgroups/stack=tcp/protocol=MPING" "socket-binding"
+        info "'socket-binding' attribute removed"
+    else
+        info "'socket-binding' attribute already removed"
+    fi
+
+    if resource-exists "/subsystem=jgroups/stack=tcp/protocol=MPING/property=initial_hosts"; then
+        info "property 'initial_hosts' already present"
+    else
+        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "initial_hosts" "\${jboss.cluster.tcp.initial_hosts}"
+        info "property=initial_hosts(\${jboss.cluster.tcp.initial_hosts}) added"
+    fi
+
+    if resource-exists "/subsystem=jgroups/stack=tcp/protocol=MPING/property=num_initial_members"; then
+        info "property 'num_initial_members' already present"
+    else
+        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "num_initial_members" "2"
+        info "property=num_initial_members(2) added"
+    fi
+
+    if resource-exists "/subsystem=jgroups/stack=tcp/protocol=MPING/property=port_range"; then
+        info "property 'port_range' already present"
+    else
+        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "port_range" "0"
+        info "property=port_range(0) added"
+    fi
+
+    if resource-exists "/subsystem=jgroups/stack=tcp/protocol=MPING/property=timeout"; then
+        info "property 'timeout' already present"
+    else
+        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "timeout" "2000"
+        info "property=timeout(2000) added"
+    fi
+
+    reload
+
+    return 0
+}
+
+#
+# sets the string provided as "initial_hosts" as a system property. It does not do any validation on the content
+# of the string, it is trusted to be syntactically and semantically correct (a comma-separated, no-space, list of
+# host[port] values.
+#
+function jgroups-set-initial_hosts-as-property() {
+
+    debug-arguments $@
+
+    initial_hosts=$1
+
+    [ -z "${initial_hosts}" ] && fail "'initial_hosts' not provided"
+    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+
+    local jboss_cluster_tcp_initial_hosts_system_property="jboss.cluster.tcp.initial_hosts"
+
+    #
+    # Important: both files need to be configured. In JDG case, clustered.conf is used when the instance is started
+    # with ./clustered.sh, but standalone.conf is used when the instance is started by systemctl, because the startup
+    # scripts invoke $JDG_HOME/bin/standalone.sh -c clustered.xml and this sources standalone.conf and not clustered.conf
+    #
+    local conf_files="standalone.conf clustered.conf"
+
+    for i in ${conf_files}; do
+        local file=${JBOSS_HOME}/bin/${i}
+        [ ! -f ${file} ] && continue
+        if grep -q "^JAVA_OPTS=\"\${JAVA_OPTS} -D${jboss_cluster_tcp_initial_hosts_system_property}=" ${file}; then
+            info "'${jboss_cluster_tcp_initial_hosts_system_property}' already configured in ${file}"
+        else
+            echo "JAVA_OPTS=\"\${JAVA_OPTS} -D${jboss_cluster_tcp_initial_hosts_system_property}=${initial_hosts}\"" >> ${file} && \
+                info "'${jboss_cluster_tcp_initial_hosts_system_property}' configured in ${file} as ${initial_hosts}" ||
+                fail "failed to write ${file}"
+        fi
+    done
+}
+
+#
+# gets a comma-separated, no spaces list of host names and returns a list of validated IP addresses and ports
+#
+# jdg1,jdg2 -> 192.168.1.1[7600],192.168.1.2[7600]
+#
+function initial-hosts-list-to-valid-initial-hosts-list() {
+
+    debug-arguments $@
+
+    local initial_hosts=$1
+
+    #
+    # resolve host names to addresses
+    #
+    local ips=""
+    initial_hosts=${initial_hosts//,/ }
+    for i in ${initial_hosts}; do
+
+        local host_name=${i%[*}
+
+        local postfix=${i:${#host_name}}
+        [ -z "${postfix}" ] && postfix="[7600]"
+
+        local ip
+        ip=$(get-internal-ip-for-name ${host_name}) || exit 1
+
+        [ -z "${ip}" ] && fail "host name ${i} cannot be resolved to an ip address"
+
+        i=${ip}${postfix}
+        debug "i: ${i}"
+        [ -z "${ips}" ] && ips="${i}" || ips="${ips},${i}"
+    done
+
+    echo "${ips}"
 }
 
 ########################################################################################################################
