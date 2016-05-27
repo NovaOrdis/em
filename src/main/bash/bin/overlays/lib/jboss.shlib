@@ -493,15 +493,9 @@ function configure-jboss-to-start-at-boot() {
     [ -z ${JAVA_HOME} ] && fail "previous steps failed to export JAVA_HOME"
     [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
 
-    local script_file
     local script_dir=/usr/lib/systemd/scripts
-    if [ "${distribution}" = "jdg" ]; then
-        script_file=${script_dir}/jboss-datagrid
-    else
-        [ "${mode}" = "standalone" ] && \
-            script_file=${script_dir}/jboss-standalone || \
-            script_file=${script_dir}/jboss-host-controller
-    fi
+    local script_file
+    script_file=${script_dir}/$(get-systemd-service-name "${mode}" "${distribution}") || exit 1
 
     #
     # create the System V init script in the systemd script directory if it is not already there
@@ -567,6 +561,18 @@ EOF
         systemctl enable $(basename ${unit_file}) && \
             info "configured ${unit_file_name} to start at boot" || \
             fail "fail to configure ${unit_file_name} to start at boot"
+    fi
+}
+
+function get-systemd-service-name() {
+
+    local mode=$1
+    local distribution=$2
+
+    if [ "${distribution}" = "jdg" ]; then
+        echo "jboss-datagrid"
+    else
+        [ "${mode}" = "domain" ] && echo "jboss-host-controller" || echo "jboss-standalone"
     fi
 }
 
@@ -686,6 +692,30 @@ ${jboss_console_log_variable_name}=${jboss_home_variable_reference}/${mode}/log/
 EOF
 
     cat ${source_file} | grep -v "^#\!\/"
+}
+
+function stop-jboss-instance() {
+
+    local name
+    name=$(get-systemd-service-name "${JBOSS_MODE}" "${JBOSS_DISTRIBUTION}") || exit 1
+
+    info "stopping ${name} service ..."
+
+    systemctl stop ${name}
+
+    info "${name} service started"
+}
+
+function start-jboss-instance() {
+
+    local name
+    name=$(get-systemd-service-name "${JBOSS_MODE}" "${JBOSS_DISTRIBUTION}") || exit 1
+
+    info "starting ${name} service ..."
+
+    systemctl start ${name} || fail "failed to start ${name} service"
+
+    info "${name} service started"
 }
 
 ########################################################################################################################
@@ -1524,20 +1554,27 @@ function jgroups-configuration() {
         shift
     done
 
-    [ -z "${default_stack}" ] && fail "no --default-stack specified"
-
     debug "default_stack: ${default_stack}"
     debug "initial_hosts: ${initial_hosts}"
 
-    jgroups-set-default-stack ${default_stack}
+
+    # configure the system property before bouncing the server, so they're loaded when we configure via CLI
 
     if [ -n "${initial_hosts}" ]; then
-        initial_hosts=$(initial-hosts-list-to-valid-initial-hosts-list "${inital_hosts}") || exit 1
+        initial_hosts=$(initial-hosts-list-to-valid-initial-hosts-list "${initial_hosts}") || exit 1
         jgroups-set-initial_hosts-as-property "${initial_hosts}"
     fi
 
-    jgroups-swap-MPING-with-TCPPING
+    stop-jboss-instance
+    start-jboss-instance
 
+    if [ -n "${default_stack}" ]; then
+        jgroups-set-default-stack ${default_stack}
+    fi
+
+    if [ "${default_stack}" = "tcp" ]; then
+        jgroups-swap-MPING-with-TCPPING
+    fi
     reload
 }
 

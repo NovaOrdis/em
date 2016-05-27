@@ -43,11 +43,8 @@ jgroups-set-initial_hosts-as-property "${initial_hosts}"
 #
 # restart the node, we need it running to be able to access it over CLI
 #
-info "stopping JDG instance ..."
-systemctl stop jboss-datagrid
-
-info "starting JDG instance ..."
-systemctl start jboss-datagrid || fail "failed to start jboss-datagrid"
+stop-jboss-instance
+start-jboss-instance
 
 jgroups-set-default-stack "tcp"
 jgroups-swap-MPING-with-TCPPING
