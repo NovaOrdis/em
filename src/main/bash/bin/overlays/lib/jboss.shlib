@@ -308,37 +308,6 @@ function configure-host.xml-host-name() {
 }
 
 #
-# Modifies the <server-groups> section of the domain controller's domain.xml based on the
-# "--server-groups" command line specification
-#
-function configure-server-groups() {
-
-    debug-arguments $@
-
-    local server_groups=$1 # empty is not acceptable - we cannot have no server groups
-    [ -z "${server_groups}" ] && fail "'server_groups' not provided"
-
-    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
-    local domain_xml_file=${JBOSS_HOME}/domain/configuration/domain.xml
-    [ -f ${domain_xml_file} ] || fail "${domain_xml_file} does not exist"
-
-    #
-    # just a hack now, reduce the memory size so we can start it on small Amazon EC2 instances
-    #
-
-
-    local size=200m
-
-    if ! grep -q "<heap size=\"${size}\"" ${domain_xml_file}; then
-        replace-regex "^\(.*\)<heap size=.*$" "\1<heap size=\\\""${size}"\\\" max-size=\\\""${size}"\\\"\/>" ${domain_xml_file} || exit 1
-        info "updated ${domain_xml_file}"
-        return 0
-    fi
-
-    return 1
-}
-
-#
 # The function configures the local host.xml with the IP address of the domain controller
 #
 function configure-master-domain-controller-locally() {
@@ -703,7 +672,7 @@ function stop-jboss-instance() {
 
     systemctl stop ${name}
 
-    info "${name} service started"
+    info "${name} service stopped"
 }
 
 function start-jboss-instance() {
@@ -1423,7 +1392,8 @@ function remove-element() {
 ########################################################################################################################
 
 #
-# configures existing server groups, adds socket-binding-group and jvm definitions.
+# configures existing server groups, adds socket-binding-group and jvm definitions. Modifies the <server-groups>
+# section of the domain controller's domain.xml based on the --server-groups command line specification.
 #
 function configure-server-groups() {
 
@@ -1470,6 +1440,11 @@ function configure-server-groups() {
             debug "<jvm ...> definition already present, moving onto the next server group"
             continue;
         fi
+
+        #
+        # TODO hw53b2
+        # just a hack now, reduce the memory size so we can start it on small Amazon EC2 instances
+        #
 
         debug "inserting jvm specification at line ${n} ..."
         local tmp=$(unique-file)
@@ -1750,6 +1725,54 @@ function initial-hosts-list-to-valid-initial-hosts-list() {
     done
 
     echo "${ips}"
+}
+
+########################################################################################################################
+# END of jboss-configuration overlay functions
+########################################################################################################################
+
+########################################################################################################################
+# Memory configuration utilities (also see TODO hw53b2)
+########################################################################################################################
+
+#
+# return 0 if state was changed
+# return 1 if no state change occurred
+# fails if an inconsistency is detected
+#
+function configure-heap-in-conf-file() {
+
+    debug-arguments $@
+
+    local max_memory_mb=$1 # max memory in MB
+
+    [ -z "${max_memory_mb}" ] && fail "'max_memory_mb' not provided"
+
+    [ -z "${JBOSS_HOME}" ] && fail "JBOSS_HOME not defined in the environment"
+
+    ! expr ${max_memory_mb} + 1 >/dev/null 2>&1 && fail "'max_memory_mb' value ${max_memory_mb} is not an integer"
+
+    local files="standalone.conf domain.conf clustered.conf"
+    for i in ${files}; do
+        local file=${JBOSS_HOME}/bin/${i}
+        [ ! -f ${file} ] && continue;
+        debug "file ${file}"
+
+        if grep -q "^ *JAVA_OPTS=\".*-Xmx${max_memory_mb}m.*\"" ${file} && grep -q "^ *JAVA_OPTS=\".*-Xms${max_memory_mb}m.*\"" ${file}; then
+            info "min/max memory ${max_memory_mb}m already set in ${file}"
+            continue;
+        fi
+
+        replace-regex "^\( *JAVA_OPTS=\\\".* *\)\(-Xmx.*m\)\( *.*$\)" "\1-Xmx"${max_memory_mb}"m\3" ${file} && \
+            info "max memory set to ${max_memory_mb}m in ${file}"
+
+        # we adjust Xms also to the same value
+        replace-regex "^\( *JAVA_OPTS=\\\".* *\)\(-Xms.*m\)\( *.*$\)" "\1-Xms"${max_memory_mb}"m\3" ${file} && \
+            info "min memory set to ${max_memory_mb}m in ${file}"
+
+    done
+
+    return 1
 }
 
 ########################################################################################################################

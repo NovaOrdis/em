@@ -51,6 +51,13 @@ if [ ${JBOSS_MODE} = "standalone" ]; then
 fi
 
 #
+# we look for memory here (and not only when we run jboss-configuration) because the instance may not
+# even start if the memory is set too high
+#
+max_memory=$(extract-from-overlay-args "max-memory" ${args})
+[ -n "${max_memory}" ] && configure-heap-in-conf-file ${max_memory}
+
+#
 # export environment variables to be used by dependents
 #
 export-environment-variables JBOSS_HOME JBOSS_DISTRIBUTION JBOSS_MODE

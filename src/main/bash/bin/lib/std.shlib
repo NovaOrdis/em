@@ -324,12 +324,12 @@ function remove-regex-line()
 #
 # replace-regex "^\(Defaults[ \t]*requiretty[ \t]*\)$" "#\1" /etc/sudoers
 #
-# Various character representation:
+# Special characters in regular expression:
 #
 # "  \\\"
 # /  \/
 #
-# The function returns 0 if the file was modified and 1 if no modification occured
+# The function returns 0 if the file was modified and 1 if no modification occurred
 #
 function replace-regex()
 {
