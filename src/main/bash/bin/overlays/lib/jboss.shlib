@@ -1563,7 +1563,6 @@ function jgroups-configuration() {
     if [ "${default_stack}" = "tcp" ]; then
         jgroups-swap-MPING-with-TCPPING
     fi
-    reload
 }
 
 #
@@ -1662,8 +1661,6 @@ function jgroups-swap-MPING-with-TCPPING() {
         add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "timeout" "2000"
         info "property=timeout(2000) added"
     fi
-
-    reload
 
     return 0
 }
@@ -1776,12 +1773,15 @@ function configure-heap-in-conf-file() {
             continue;
         fi
 
-        replace-regex "^\( *JAVA_OPTS=\\\".* *\)\(-Xmx.*m\)\( *.*$\)" "\1-Xmx"${max_memory_mb}"m\3" ${file} && \
+        replace-regex "^\( *JAVA_OPTS=\\\".*-Xmx\).*\(m -XX.*$\)" "\1"${max_memory_mb}"\2" ${file} && \
             info "max memory set to ${max_memory_mb}m in ${file}"
 
-        # we adjust Xms also to the same value
-        replace-regex "^\( *JAVA_OPTS=\\\".* *\)\(-Xms.*m\)\( *.*$\)" "\1-Xms"${max_memory_mb}"m\3" ${file} && \
+        # we adjust Xms to the same value
+        replace-regex "^\( *JAVA_OPTS=\\\".*-Xms\).*\(m -Xmx.*$\)" "\1"${max_memory_mb}"\2" ${file} && \
             info "min memory set to ${max_memory_mb}m in ${file}"
+
+#        replace-regex "^\( *JAVA_OPTS=\\\".* *\)\(-Xms.*m\)\( *.*$\)" "\1-Xms"${max_memory_mb}"m\3" ${file} && \
+#            info "min memory set to ${max_memory_mb}m in ${file}"
 
     done
 
@@ -1790,14 +1790,6 @@ function configure-heap-in-conf-file() {
 
 ########################################################################################################################
 # END of Memory configuration utilities
-########################################################################################################################
-
-########################################################################################################################
-# Infinispan configuration utilities
-########################################################################################################################
-
-########################################################################################################################
-# END of Infinispan configuration utilities
 ########################################################################################################################
 
 ########################################################################################################################
