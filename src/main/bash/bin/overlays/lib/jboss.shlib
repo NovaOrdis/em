@@ -697,8 +697,16 @@ function start-jboss-instance() {
 #
 function get-cli-wrapper-script-name() {
 
-    [ "${JBOSS_DISTRIBUTION}" = "jdg" ] && { echo "cli.sh"; return 0; }
-    echo "jboss-cli.sh"
+    [ -z ${JBOSS_HOME} ] && fail "JBOSS_HOME not availabile in the environment"
+
+    local candidates="jboss-cli.sh cli.sh"
+
+    for i in ${candidates}; do
+        local f=${JBOSS_HOME}/bin/${i}
+        [ -f ${f} -a -x ${f} ] && { echo "${i}"; return 0; }
+    done
+
+    fail "no JBoss CLI wrapper found in ${JBOSS_HOME}/bin (candidates: ${candidates})"
 }
 
 #
@@ -721,7 +729,7 @@ function jboss-cli() {
     local username=$3 # username (empty if local invocation)
     local password=$4 # password (empty if local invocation)
 
-    [ -z ${JBOSS_HOME} ] && fail "previous steps failed to export JBOSS_HOME"
+    [ -z ${JBOSS_HOME} ] && fail "JBOSS_HOME not availabile in the environment"
 
     local connect_args;
 
@@ -808,6 +816,11 @@ function read-attribute() {
 
 #
 # Writes the attribute value for the given attribute.
+#
+# If the attribute does not exist, but it is a known attribute to the management node, it is created and assigned
+# to the given value. If the attribute does not exist and it is not a known attribute to the management node, the
+# operation fails with "outcome" => "failed" and description "JBAS014792: Unknown attribute ..."
+# If the attribute exists, the current value is overwritten
 #
 # TODO what happens if the attribute does not exist?
 #
@@ -1774,6 +1787,18 @@ function configure-heap-in-conf-file() {
 
     return 1
 }
+
+########################################################################################################################
+# END of Memory configuration utilities
+########################################################################################################################
+
+########################################################################################################################
+# Infinispan configuration utilities
+########################################################################################################################
+
+########################################################################################################################
+# END of Infinispan configuration utilities
+########################################################################################################################
 
 ########################################################################################################################
 # END of jboss-configuration overlay functions

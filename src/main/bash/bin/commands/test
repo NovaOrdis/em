@@ -3,8 +3,9 @@
 lib=$(dirname $0)/../lib/std.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 lib=$(dirname $0)/../overlays/lib/jboss.shlib; [ -f ${lib} ] && . ${lib} || { echo "${lib} not found" 1>&2; exit 1; }
 
-export JBOSS_HOME=/Users/ovidiu/tmp/jboss
+export JBOSS_HOME=/Users/ovidiu/runtime/jboss-datagrid-6.6.0-server
 
 verbose=true
 
-configure-heap-in-conf-file $1
+#write-attribute /socket-binding-group=standard-sockets/socket-binding=hotrod no-such-attr no-such-value
+remove-attribute /socket-binding-group=standard-sockets/socket-binding=hotrod interface

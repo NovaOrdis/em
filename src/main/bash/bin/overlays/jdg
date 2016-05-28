@@ -46,8 +46,13 @@ jgroups-set-initial_hosts-as-property "${initial_hosts}"
 stop-jboss-instance
 start-jboss-instance
 
+#
+# Various JDG-specific configuration
+#
 jgroups-set-default-stack "tcp"
 jgroups-swap-MPING-with-TCPPING
+write-attribute /socket-binding-group=standard-sockets/socket-binding=hotrod interface public
+
 reload
 
 exit 0
