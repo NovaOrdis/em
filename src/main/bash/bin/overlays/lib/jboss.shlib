@@ -1,5 +1,50 @@
 #!/bin/bash
 
+########################################################################################################################
+# various accessors
+########################################################################################################################
+
+function get-installed-jboss-version() {
+
+    debug-arguments $@
+
+    local jboss_home=$1
+    [ -z "${jboss_home}" ] && fail "'jboss_home' not provided"
+
+    local version_file=${jboss_home}/version.txt
+
+    [ ! -f ${version_file} ] && fail "version file ${version_file} not found"
+
+    local banner="Red Hat JBoss Enterprise Application Platform - Version"
+
+    local version
+    version=$(cat ${version_file} | grep "${banner}" | sed -e 's/^.*Version //') || \
+        fail "failed to read version from ${version_file}"
+
+    [ -z "${version}" ] && fail "the version file ${version_file} does not seem to contain \"${banner}\" so we don't know how to handle it, this is a case we did not see before"
+
+    [[ ${version} =~ .*\.GA ]] || fail "the version ${version} does not end in .GA, we don't know how to handle"
+
+    version=${version%.*}
+
+    echo ${version}
+}
+
+function get-patch-file-name() {
+
+    debug-arguments $@
+    local version=$1
+    local level=$2
+    local file_name=${version%.*}.${level}
+    file_name="jboss-eap-${file_name}-patch.zip"
+    echo "${file_name}"
+}
+
+########################################################################################################################
+# END of various accessors
+########################################################################################################################
+
+
 #
 # Successful installation exports the following in the environment:
 #   1. a valid JBOSS_HOME
@@ -712,9 +757,14 @@ function get-cli-wrapper-script-name() {
 #
 # Connects locally or remotely and executes the given command. It needs the target instance to be up and running.
 #
-# returns 0 if the command executes successfully, and sends the ouptut of the command to stdout
+# returns 0 if the command executes successfully, and sends the output of the command to stdout
 # returns 1 if the command executes with a "failure" outcome, and sends the output of the command to stdout
 # fails if the command fails to execute
+#
+# Usage example:
+#
+#  jboss-cli "/:read-attribute(name=product-version)"
+#
 #
 function jboss-cli() {
 
@@ -729,7 +779,7 @@ function jboss-cli() {
     local username=$3 # username (empty if local invocation)
     local password=$4 # password (empty if local invocation)
 
-    [ -z ${JBOSS_HOME} ] && fail "JBOSS_HOME not availabile in the environment"
+    [ -z ${JBOSS_HOME} ] && fail "JBOSS_HOME not available in the environment"
 
     local connect_args;
 
@@ -982,7 +1032,32 @@ function reload() {
     local output
     output=$(jboss-cli "reload") || fail "CLI reload command failed"
 
-    info "JBoss instance management model reloaded"
+    info "jboss instance management model reloaded"
+}
+
+function restart() {
+
+    debug-arguments $@
+
+    local host_and_port=$1 # the host:port if not local invocation (empty if local invocation)
+    local username=$2 # username (empty if local invocation)
+    local password=$3 # password (empty if local invocation)
+
+    local output
+    output=$(jboss-cli "shutdown --restart=true") || fail "CLI reload command failed"
+
+    info "jboss instance restarted"
+}
+
+#
+# return 0 if the JBoss instance is available, 1 otherwise. It tests by connecting via CLI and attempting to read
+# the version
+#
+function is-jboss-running() {
+
+    debug-arguments $@
+
+    output=$(jboss-cli "/:read-attribute(name=product-version)") && return 0 || return 1
 }
 
 ########################################################################################################################
@@ -1794,4 +1869,63 @@ function configure-heap-in-conf-file() {
 
 ########################################################################################################################
 # END of jboss-configuration overlay functions
+########################################################################################################################
+
+########################################################################################################################
+# Patching
+########################################################################################################################
+
+function apply-jboss-patch() {
+
+    debug-arguments $@
+
+    local level=$1
+    [ -z "${level}" ] && fail "'level' not provided"
+
+    [ -z "${JBOSS_HOME}" ] && fail "JBOSS_HOME not defined in the environment"
+
+
+    local version
+    version=$(get-installed-jboss-version "${JBOSS_HOME}") || exit 1
+
+    local patch_level=${version##*.}
+    debug "patch level: ${patch_level}"
+
+    if [ "${patch_level}" -ge "${level}" ]; then
+        info "jboss already patched at level ${patch_level}"
+        return 0
+    fi
+
+    local patch_file_name
+    patch_file_name=$(get-patch-file-name ${version} ${level}) || exit 1
+
+    debug "patch file name: ${patch_file_name}"
+
+    local repository
+    repository=$(get-environment-configuration "repository") || exit 1
+    [ -d ${repository} ] || fail "repository directory ${repository} not accessible"
+
+    local patch_file=${repository}/${patch_file_name}
+    debug "patch file: ${patch_file}"
+    [ -f ${patch_file} ] || fail "patch file ${patch_file} not available in repository"
+
+    if ! is-jboss-running; then
+        debug "jboss not running"
+        start-jboss-instance
+    fi
+
+    debug "jboss should be running now ..."
+
+    info "applying patch ${patch_file} (this may take a while ...)"
+
+    local output
+    output=$(jboss-cli "patch apply ${patch_file}") || exit 1
+
+    info "${patch_file} applied"
+
+    restart
+}
+
+########################################################################################################################
+# END of Patching
 ########################################################################################################################
