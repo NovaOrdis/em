@@ -846,14 +846,16 @@ function read-attribute() {
     fi
 
     debug "read-attribute invocation successful"
-    value=$(echo "${value}" | sed -e 's/^.*\"result\" *=> *\(.*\),.*$/\1/')
+    value=$(echo "${value}" | sed -e 's/^.*\"result\" *=> *//g')
     debug "value: ${value}"
 
-    if [ "${value}" = "undefined" ]; then
+    if [[ "${value}" =~ ^undefined ]]; then
+        debug "undefined value"
         echo ""
         return 1
     else
-
+        value=${value%%,*}
+        value=${value%% \}*}
         #
         # strip quotes if any
         #
@@ -944,11 +946,17 @@ function read-resource() {
 }
 
 #
-# Adds the resource with the given type, name and value to the specified parent resource
+# Adds the resource with the given type, name and optionally value to the specified parent resource
 #
 # Usage example:
 #
-# add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING/" "property" "initial_hosts" "jdg1,jdg2"
+#   Without a value
+#
+#        add-resource "/subsystem=infinispan/cache-container=test:add()
+#
+#   With a value:
+#
+#        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING/" "property" "initial_hosts" "jdg1,jdg2"
 #
 # will result in creation of "/subsystem=jgroups/stack=tcp/protocol=MPING/property=initial_hosts with the value "jdg1,jdg2"
 #
@@ -959,23 +967,37 @@ function add-resource() {
     local path=$1 # the resource path
     local resource_type=$2
     local resource_name=$3
-    local resource_value=$4
-    local host_and_port=$5 # the host:port if not local invocation (empty if local invocation)
-    local username=$6 # username (empty if local invocation)
-    local password=$7 # password (empty if local invocation)
+    local resource_attribute_name=$4
+    local resource_attribute_value=$5
+    local resource_attribute_name_2=$6
+    local resource_attribute_value_2=$7
+    local host_and_port=$8 # the host:port if not local invocation (empty if local invocation)
+    local username=$9 # username (empty if local invocation)
+    #local password=$10 # password (empty if local invocation)
 
     [ -z "${path}" ] && fail "'path' not provided"
     [ -z "${resource_type}" ] && fail "'resource_type' not provided"
     [ -z "${resource_name}" ] && fail "'resource_name' not provided"
-    [ -z "${resource_value}" ] && fail "'resource_value' not provided"
 
     #
     # clean trailing /
     #
     path=${path%/}
 
+    local command="${path}/${resource_type}=${resource_name}"
+
+    if [ -z "${resource_attribute_name}" ]; then
+        command="${command}:add()"
+    else
+        if [ -z "${resource_attribute_name_2}" ]; then
+            command="${command}:add(${resource_attribute_name}=${resource_attribute_value})"
+        else
+            command="${command}:add(${resource_attribute_name}=${resource_attribute_value},${resource_attribute_name_2}=${resource_attribute_value_2})"
+        fi
+    fi
+
     local output
-    output=$(jboss-cli "${path}/${resource_type}=${resource_name}:add(value=\"${resource_value}\")") || \
+    output=$(jboss-cli ${command}) || \
         fail "JBoss CLI invocation failed"
 }
 
@@ -999,7 +1021,9 @@ function remove-resource() {
 }
 
 #
-# Returns 0 if the specified resource exists or 1 if not. Requries the CLI path of the resource.
+# Returns 0 if the specified resource exists or 1 if not. Requires the CLI path of the resource.
+#
+# Usage: resource-exists /subsystem=infinispan/cache-container=web
 #
 function resource-exists() {
 
@@ -1712,28 +1736,28 @@ function jgroups-swap-MPING-with-TCPPING() {
     if resource-exists "/subsystem=jgroups/stack=tcp/protocol=MPING/property=initial_hosts"; then
         info "property 'initial_hosts' already present"
     else
-        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "initial_hosts" "\${jboss.cluster.tcp.initial_hosts}"
+        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "initial_hosts" "value" "\${jboss.cluster.tcp.initial_hosts}"
         info "property=initial_hosts(\${jboss.cluster.tcp.initial_hosts}) added"
     fi
 
     if resource-exists "/subsystem=jgroups/stack=tcp/protocol=MPING/property=num_initial_members"; then
         info "property 'num_initial_members' already present"
     else
-        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "num_initial_members" "2"
+        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "num_initial_members" "value" "2"
         info "property=num_initial_members(2) added"
     fi
 
     if resource-exists "/subsystem=jgroups/stack=tcp/protocol=MPING/property=port_range"; then
         info "property 'port_range' already present"
     else
-        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "port_range" "0"
+        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "port_range" "value" "0"
         info "property=port_range(0) added"
     fi
 
     if resource-exists "/subsystem=jgroups/stack=tcp/protocol=MPING/property=timeout"; then
         info "property 'timeout' already present"
     else
-        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "timeout" "2000"
+        add-resource "/subsystem=jgroups/stack=tcp/protocol=MPING" "property" "timeout" "value" "2000"
         info "property=timeout(2000) added"
     fi
 
@@ -1801,7 +1825,6 @@ function initial-hosts-list-to-valid-initial-hosts-list() {
 
         local ip
         ip=$(get-internal-ip-for-name ${host_name}) || exit 1
-
         [ -z "${ip}" ] && fail "host name ${i} cannot be resolved to an ip address"
 
         i=${ip}${postfix}
@@ -1929,3 +1952,126 @@ function apply-jboss-patch() {
 ########################################################################################################################
 # END of Patching
 ########################################################################################################################
+
+function jdg-remote-cache-configuration() {
+
+    debug-arguments $@
+
+    local cache_container
+    local cache
+    local jdg_cache
+    local jdg_host
+    local jdg_port
+
+    for arg do
+        if [[ ${arg} =~ --cache-container= ]]; then
+            cache_container=${arg#*=}
+        elif [[ ${arg} =~ --cache= ]]; then
+            cache=${arg#*=}
+        elif [[ ${arg} =~ --jdg-cache= ]]; then
+            jdg_cache=${arg#*=}
+        elif [[ ${arg} =~ --jdg-host= ]]; then
+            jdg_host=${arg#*=}
+        elif [[ ${arg} =~  --jdg-port= ]]; then
+            jdg_port=${arg#*=}
+        else
+            debug "ignored ${arg}"
+        fi
+    done
+
+    [ -z "${cache_container}" ] && fail "'cache_container' not provided, use --cache-container="
+    [ -z "${cache}" ] && fail "'cache' not provided, use --cache="
+    [ -z "${jdg_cache}" ] && fail "'jdg_cache' not provided, use --jdg-cache="
+    [ -z "${jdg_host}" ] && fail "'jdg_host' not provided, use --jdg-host="
+    [ -z "${jdg_port}" ] && jdg_port=11222
+
+    #
+    # convert name to ip
+    #
+    local jdg_host_ip
+    jdg_host_ip=$(get-internal-ip-for-name ${jdg_host}) || exit 1
+    [ -z "${jdg_host_ip}" ] && fail "host name ${jdg_host} cannot be resolved to an ip address"
+
+    if ! resource-exists /subsystem=infinispan/cache-container=${cache_container}; then
+        add-resource /subsystem=infinispan cache-container ${cache_container}
+        info "added /subsystem=infinispan/cache-container=${cache_container}"
+    fi
+
+    local attr
+
+    attr=$(read-attribute /subsystem=infinispan/cache-container=${cache_container} module)
+    local module_expected_value="org.jboss.as.clustering.web.infinispan"
+    if [ "${attr}" = ${module_expected_value} ]; then
+        # noop
+        debug "module:${attr}"
+    elif [ "${attr}" = "" ]; then
+        write-attribute /subsystem=infinispan/cache-container=${cache_container} module ${module_expected_value}
+        info "wrote /subsystem=infinispan/cache-container=${cache_container} module-cache=${module_expected_value}"
+    else
+        fail "module is supposed to be \"${module_expected_value}\" but it is \"${attr}\""
+    fi
+
+    #
+    # the transport
+    #
+
+    if ! resource-exists /subsystem=infinispan/cache-container=${cache_container}/transport=TRANSPORT; then
+        add-resource /subsystem=infinispan/cache-container=${cache_container} transport TRANSPORT lock-timeout 60000
+        info "added  /subsystem=infinispan/cache-container=${cache_container}/transport"
+    fi
+
+    #
+    # the replicated cache
+    #
+
+    if ! resource-exists /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}; then
+        add-resource /subsystem=infinispan/cache-container=${cache_container} replicated-cache ${cache} "mode" "SYNC"
+        info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}"
+    fi
+
+    write-attribute /subsystem=infinispan/cache-container=${cache_container} default-cache ${cache}
+    info "wrote /subsystem=infinispan/cache-container=${cache_container} default-cache=${cache}"
+
+    #
+    # the remote store
+    #
+
+    if ! resource-exists /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE; then
+        # this is really weird
+        add-resource /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache} remote-store REMOTE_STORE remote-servers "[{\"outbound-socket-binding\"=>\"initial-jdg-server\"}]"
+        info "added  /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store"
+    fi
+
+    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE cache ${jdg_cache}
+    info "wrote /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE cache=${jdg_cache}"
+
+    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE socket-timeout 60000
+    info "wrote /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE socket-timeout=60000"
+
+    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE shared true
+    info "wrote /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE shared=true"
+
+    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE preload true
+    info "wrote /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE preload=true"
+
+    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE passivation false
+    info "wrote /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE passivation=false"
+
+    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE purge false
+    info "wrote /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE purge=false"
+
+    #
+    # add the outbound-socket-binding
+    #
+
+    if ! resource-exists /socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=initial-jdg-server; then
+        add-resource /socket-binding-group=standard-sockets remote-destination-outbound-socket-binding initial-jdg-server "host" "${jdg_host_ip}" "port" "${jdg_port}"
+        info "added /socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=initial-jdg-server(host=${jdg_host_ip}, port=${jdg_port}) "
+    fi
+
+    restart
+
+
+
+
+}

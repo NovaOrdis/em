@@ -23,8 +23,16 @@ lib=$(dirname $0)/lib/$(basename $0).shlib; [ -f ${lib} ] && . ${lib}
 process-overlay-arguments $@
 overlay-preconditions
 
-subsystem=$(extract-from-overlay-args "subsystem" ${args})
-${subsystem}-configuration ${args}
+procedure=$(extract-from-overlay-args "procedure" ${args})
+
+if [ -n "{procedure}" ]; then
+    ${procedure}-configuration ${args}
+else
+
+    # TODO unify "subsystem" and "procedure"
+    subsystem=$(extract-from-overlay-args "subsystem" ${args})
+    ${subsystem}-configuration ${args}
+fi
 
 exit 0
 
