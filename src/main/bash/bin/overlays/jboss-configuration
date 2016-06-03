@@ -26,6 +26,9 @@ overlay-preconditions
 procedure=$(extract-from-overlay-args "procedure" ${args})
 
 if [ -n "{procedure}" ]; then
+
+     is-jboss-running || start-jboss-instance
+
     ${procedure}-configuration ${args}
 else
 

@@ -1984,8 +1984,8 @@ function jdg-remote-cache-configuration() {
     [ -z "${jdg_cache}" ] && fail "'jdg_cache' not provided, use --jdg-cache="
     [ -z "${jdg_host}" ] && fail "'jdg_host' not provided, use --jdg-host="
     [ -z "${jdg_port}" ] && jdg_port=11222
-
     #
+
     # convert name to ip
     #
     local jdg_host_ip
@@ -2006,7 +2006,7 @@ function jdg-remote-cache-configuration() {
         debug "module:${attr}"
     elif [ "${attr}" = "" ]; then
         write-attribute /subsystem=infinispan/cache-container=${cache_container} module ${module_expected_value}
-        info "wrote /subsystem=infinispan/cache-container=${cache_container} module-cache=${module_expected_value}"
+        info "added /subsystem=infinispan/cache-container=${cache_container} module-cache=${module_expected_value}"
     else
         fail "module is supposed to be \"${module_expected_value}\" but it is \"${attr}\""
     fi
@@ -2017,7 +2017,7 @@ function jdg-remote-cache-configuration() {
 
     if ! resource-exists /subsystem=infinispan/cache-container=${cache_container}/transport=TRANSPORT; then
         add-resource /subsystem=infinispan/cache-container=${cache_container} transport TRANSPORT lock-timeout 60000
-        info "added  /subsystem=infinispan/cache-container=${cache_container}/transport"
+        info "added /subsystem=infinispan/cache-container=${cache_container}/transport"
     fi
 
     #
@@ -2025,12 +2025,12 @@ function jdg-remote-cache-configuration() {
     #
 
     if ! resource-exists /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}; then
-        add-resource /subsystem=infinispan/cache-container=${cache_container} replicated-cache ${cache} "mode" "SYNC"
+        add-resource /subsystem=infinispan/cache-container=${cache_container} replicated-cache ${cache} "mode" "SYNC" "batching" "true"
         info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}"
     fi
 
     write-attribute /subsystem=infinispan/cache-container=${cache_container} default-cache ${cache}
-    info "wrote /subsystem=infinispan/cache-container=${cache_container} default-cache=${cache}"
+    info "added /subsystem=infinispan/cache-container=${cache_container} default-cache=${cache}"
 
     #
     # the remote store
@@ -2043,22 +2043,22 @@ function jdg-remote-cache-configuration() {
     fi
 
     write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE cache ${jdg_cache}
-    info "wrote /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE cache=${jdg_cache}"
+    info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE cache=${jdg_cache}"
 
     write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE socket-timeout 60000
-    info "wrote /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE socket-timeout=60000"
+    info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE socket-timeout=60000"
 
     write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE shared true
-    info "wrote /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE shared=true"
+    info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE shared=true"
 
     write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE preload true
-    info "wrote /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE preload=true"
+    info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE preload=true"
 
     write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE passivation false
-    info "wrote /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE passivation=false"
+    info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE passivation=false"
 
     write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE purge false
-    info "wrote /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE purge=false"
+    info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE purge=false"
 
     #
     # add the outbound-socket-binding
@@ -2071,7 +2071,40 @@ function jdg-remote-cache-configuration() {
 
     restart
 
-
-
-
 }
+
+function mod-cluster-backend-configuration() {
+
+    debug-arguments $@
+
+    local load_balancer
+    local load_balancer_port=8088
+
+    for arg do
+        if [[ ${arg} =~ --load-balancer= ]]; then
+            load_balancer=${arg#*=}
+        else
+            debug "ignored ${arg}"
+        fi
+    done
+
+    [ -z "${load_balancer}" ] && fail "'load_balancer' not provided, use --load-balancer="
+
+    #
+    # convert name to ip
+    #
+    local load_balancer_ip
+    load_balancer_ip=$(get-internal-ip-for-name ${load_balancer}) || exit 1
+    [ -z "${load_balancer_ip}" ] && fail "host name ${load_balancer} cannot be resolved to an ip address"
+
+    remove-attribute /subsystem=modcluster/mod-cluster-config=configuration advertise-socket
+
+    write-attribute /subsystem=modcluster/mod-cluster-config=configuration proxy-list ${load_balancer_ip}:${load_balancer_port}
+    info "added /subsystem=modcluster/mod-cluster-config=configuration proxy-list=${load_balancer_ip}:${load_balancer_port}"
+
+    write-attribute /subsystem=modcluster/mod-cluster-config=configuration advertise false
+    info "added /subsystem=modcluster/mod-cluster-config=configuration advertise=false"
+
+    restart
+}
+
