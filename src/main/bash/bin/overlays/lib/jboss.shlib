@@ -2051,8 +2051,9 @@ function jdg-remote-cache-configuration() {
     write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE shared true
     info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE shared=true"
 
-    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE preload true
-    info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE preload=true"
+    local preload=false
+    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE preload ${preload}
+    info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE preload=${preload}"
 
     write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE passivation false
     info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE passivation=false"
