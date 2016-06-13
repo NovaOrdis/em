@@ -823,9 +823,9 @@ EOF
 #
 # Usage example:
 #
-# read-attribute "/subsystem=jgroups" "default-stack"
+# cli-read-attribute "/subsystem=jgroups" "default-stack"
 #
-function read-attribute() {
+function cli-read-attribute() {
 
     debug-arguments $@
 
@@ -1681,7 +1681,7 @@ function jgroups-set-default-stack() {
     [ -z "${new_stack}" ] && fail "'new_stack' not specified"
 
     local current_stack
-    current_stack=$(read-attribute "/subsystem=jgroups" "default-stack") || fail "fail to read the value of the current default stack"
+    current_stack=$(cli-read-attribute "/subsystem=jgroups" "default-stack") || fail "fail to read the value of the current default stack"
 
     debug "current stack: ${current_stack}"
     debug "new stack: ${new_stack}"
@@ -1726,7 +1726,7 @@ function jgroups-swap-MPING-with-TCPPING() {
 
     info "MPING replaced with TCPPING"
 
-    if output=$(read-attribute "/subsystem=jgroups/stack=tcp/protocol=MPING" "socket-binding"); then
+    if output=$(cli-read-attribute "/subsystem=jgroups/stack=tcp/protocol=MPING" "socket-binding"); then
         remove-attribute "/subsystem=jgroups/stack=tcp/protocol=MPING" "socket-binding"
         info "'socket-binding' attribute removed"
     else
@@ -1999,7 +1999,7 @@ function jdg-remote-cache-configuration() {
 
     local attr
 
-    attr=$(read-attribute /subsystem=infinispan/cache-container=${cache_container} module)
+    attr=$(cli-read-attribute /subsystem=infinispan/cache-container=${cache_container} module)
     local module_expected_value="org.jboss.as.clustering.web.infinispan"
     if [ "${attr}" = ${module_expected_value} ]; then
         # noop
