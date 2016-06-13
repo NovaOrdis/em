@@ -18,14 +18,6 @@ function debug
     return 0
 }
 
-#
-# Send error information at stderr and exit. The return code is 255.
-#
-function fail
-{
-    echo "[error]: $@" 1>&2 && exit 255
-}
-
 function debug-arguments
 {
     #${verbose} && echo "${FUNCNAME[1]}($@)" 1>&2;
@@ -49,6 +41,14 @@ function debug-arguments
     fi
 
     return 0
+}
+
+#
+# Send error information at stderr and exit. The return code is 255.
+#
+function fail
+{
+    echo "[error]: $@" 1>&2 && exit 255
 }
 
 #
