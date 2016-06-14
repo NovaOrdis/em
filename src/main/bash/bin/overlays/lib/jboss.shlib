@@ -878,9 +878,9 @@ function cli-read-attribute() {
 #
 # Usage example:
 #
-# write-attribute /subsystem=jgroups/stack=tcp/protocol=MPING/ comment "some comment"
+# cli-write-attribute /subsystem=jgroups/stack=tcp/protocol=MPING/ comment "some comment"
 #
-function write-attribute() {
+function cli-write-attribute() {
 
     debug-arguments $@
 
@@ -1005,7 +1005,7 @@ function add-resource() {
 # Returns 0 if the resource was successfully removed
 # Returns 1 if the resource does not exist
 #
-function remove-resource() {
+function cli-remove-resource() {
 
     debug-arguments $@
 
@@ -1691,7 +1691,7 @@ function jgroups-set-default-stack() {
         return 1
     fi
 
-    write-attribute "/subsystem=jgroups" "default-stack" ${new_stack} || fail "failed to write the default stack"
+    cli-write-attribute "/subsystem=jgroups" "default-stack" ${new_stack} || fail "failed to write the default stack"
 
     info "set default_stack to ${new_stack}"
 }
@@ -1722,7 +1722,7 @@ function jgroups-swap-MPING-with-TCPPING() {
 
     debug "TCPPING does not seem to exist, swapping MPING with TCPPING ..."
 
-    write-attribute "/subsystem=jgroups/stack=tcp/protocol=MPING" "type" "TCPPING"
+    cli-write-attribute "/subsystem=jgroups/stack=tcp/protocol=MPING" "type" "TCPPING"
 
     info "MPING replaced with TCPPING"
 
@@ -2005,7 +2005,7 @@ function jdg-remote-cache-configuration() {
         # noop
         debug "module:${attr}"
     elif [ "${attr}" = "" ]; then
-        write-attribute /subsystem=infinispan/cache-container=${cache_container} module ${module_expected_value}
+        cli-write-attribute /subsystem=infinispan/cache-container=${cache_container} module ${module_expected_value}
         info "added /subsystem=infinispan/cache-container=${cache_container} module-cache=${module_expected_value}"
     else
         fail "module is supposed to be \"${module_expected_value}\" but it is \"${attr}\""
@@ -2029,7 +2029,7 @@ function jdg-remote-cache-configuration() {
         info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}"
     fi
 
-    write-attribute /subsystem=infinispan/cache-container=${cache_container} default-cache ${cache}
+    cli-write-attribute /subsystem=infinispan/cache-container=${cache_container} default-cache ${cache}
     info "added /subsystem=infinispan/cache-container=${cache_container} default-cache=${cache}"
 
     #
@@ -2042,23 +2042,23 @@ function jdg-remote-cache-configuration() {
         info "added  /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store"
     fi
 
-    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE cache ${jdg_cache}
+    cli-write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE cache ${jdg_cache}
     info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE cache=${jdg_cache}"
 
-    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE socket-timeout 60000
+    cli-write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE socket-timeout 60000
     info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE socket-timeout=60000"
 
-    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE shared true
+    cli-write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE shared true
     info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE shared=true"
 
     local preload=false
-    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE preload ${preload}
+    cli-write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE preload ${preload}
     info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE preload=${preload}"
 
-    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE passivation false
+    cli-write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE passivation false
     info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE passivation=false"
 
-    write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE purge false
+    cli-write-attribute /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE purge false
     info "added /subsystem=infinispan/cache-container=${cache_container}/replicated-cache=${cache}/remote-store=REMOTE_STORE purge=false"
 
     #
@@ -2100,10 +2100,10 @@ function mod-cluster-backend-configuration() {
 
     remove-attribute /subsystem=modcluster/mod-cluster-config=configuration advertise-socket
 
-    write-attribute /subsystem=modcluster/mod-cluster-config=configuration proxy-list ${load_balancer_ip}:${load_balancer_port}
+    cli-write-attribute /subsystem=modcluster/mod-cluster-config=configuration proxy-list ${load_balancer_ip}:${load_balancer_port}
     info "added /subsystem=modcluster/mod-cluster-config=configuration proxy-list=${load_balancer_ip}:${load_balancer_port}"
 
-    write-attribute /subsystem=modcluster/mod-cluster-config=configuration advertise false
+    cli-write-attribute /subsystem=modcluster/mod-cluster-config=configuration advertise false
     info "added /subsystem=modcluster/mod-cluster-config=configuration advertise=false"
 
     restart

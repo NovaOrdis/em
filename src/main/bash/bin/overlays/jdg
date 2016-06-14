@@ -51,7 +51,7 @@ start-jboss-instance
 #
 jgroups-set-default-stack "tcp"
 jgroups-swap-MPING-with-TCPPING
-write-attribute /socket-binding-group=standard-sockets/socket-binding=hotrod interface public && info "made hotrod connector interface public"
+cli-write-attribute /socket-binding-group=standard-sockets/socket-binding=hotrod interface public && info "made hotrod connector interface public"
 
 reload
 
